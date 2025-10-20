@@ -168,24 +168,58 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       normalizedUrl = normalizedUrl.replace(/\/vn\//, '/');
       normalizedUrl = normalizedUrl.replace(/\/[a-z]{2}\//, '/'); // Remove other language codes
       
-      // Use r.jina.ai to fetch readable page content (bypasses CORS)
-      const proxyUrl = `https://r.jina.ai/http://${normalizedUrl}`;
-      console.log('Fetching from:', proxyUrl);
+      // Try multiple proxy services for CORS bypass
+      const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent('https://' + normalizedUrl)}`,
+        `https://cors-anywhere.herokuapp.com/https://${normalizedUrl}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://' + normalizedUrl)}`
+      ];
       
-      const res = await fetch(proxyUrl);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+      let text = '';
+      let lastError = null;
+      
+      // Try each proxy until one works
+      for (let i = 0; i < proxies.length; i++) {
+        try {
+          const proxyUrl = proxies[i];
+          console.log(`Trying proxy ${i + 1}/${proxies.length}:`, proxyUrl);
+          
+          const res = await fetch(proxyUrl);
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          
+          text = await res.text();
+          console.log('Fetched text length:', text.length);
+          console.log('First 500 chars:', text.substring(0, 500));
+          
+          // If we got some content, break out of the loop
+          if (text.length > 100) {
+            break;
+          }
+        } catch (error) {
+          console.log(`Proxy ${i + 1} failed:`, error.message);
+          lastError = error;
+          if (i === proxies.length - 1) {
+            throw lastError; // All proxies failed
+          }
+        }
       }
-      
-      const text = await res.text();
-      console.log('Fetched text length:', text.length);
-      console.log('First 500 chars:', text.substring(0, 500));
       
       const parsed = parseQuizletReadableText(text);
       console.log('Parsed cards:', parsed.length);
       
       if (parsed.length === 0) {
-        setQuizletError('Không đọc được dữ liệu từ URL này. Hãy thử dùng Export trên Quizlet rồi dán vào khung nhập thủ công.');
+        setQuizletError(`
+          Không đọc được dữ liệu từ URL này. 
+          
+          🔧 Cách khác để import từ Quizlet:
+          1. Mở URL Quizlet trong trình duyệt
+          2. Nhấn nút "Export" (thường ở góc phải)
+          3. Chọn "Copy text" 
+          4. Dán vào khung "Nhập thủ công" bên dưới
+          5. Chọn delimiter phù hợp (Tab hoặc Comma)
+        `);
         setPreviewCards([]);
       } else {
         setPreviewCards(parsed);
