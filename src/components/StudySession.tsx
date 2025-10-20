@@ -19,6 +19,8 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     incorrect: 0,
     total: cards.length
   });
+  // Keep action history to support Undo
+  const [actionHistory, setActionHistory] = useState<Array<{ cardId: string; prevCard: Flashcard; wasCorrect: boolean }>>([]);
 
   const currentCard = cards[currentIndex];
   const progress = ((currentIndex + 1) / cards.length) * 100;
@@ -48,7 +50,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 1.0; // Tốc độ gốc tự nhiên
+      utterance.rate = 0.92; // Tốc độ gốc tự nhiên
       utterance.pitch = 1.0; // Cao độ tự nhiên
       utterance.volume = 1.0; // Âm lượng tối đa
       
@@ -122,6 +124,8 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
   const handleAnswer = (correct: boolean) => {
     const responseTime = Date.now() - startTime;
     const updatedCard = updateCardAfterReview(currentCard, correct, responseTime);
+    // Save history snapshot for undo
+    setActionHistory(prev => [...prev, { cardId: currentCard.id, prevCard: currentCard, wasCorrect: correct }]);
     
     // Update the cards map
     const newUpdatedCardsMap = new Map(updatedCardsMap);
@@ -156,6 +160,45 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
       onComplete(finalCards, finalIncorrect);
     }
+  };
+
+  const handleUndo = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (currentIndex === 0 || actionHistory.length === 0) return;
+    const lastAction = actionHistory[actionHistory.length - 1];
+    const restoredCard = lastAction.prevCard;
+
+    // Restore card state in map
+    const newMap = new Map(updatedCardsMap);
+    newMap.set(restoredCard.id, restoredCard);
+    setUpdatedCardsMap(newMap);
+
+    // Adjust incorrect cards list
+    if (!lastAction.wasCorrect) {
+      // Remove the last occurrence of this card id in incorrectCards
+      const idx = [...incorrectCards].reverse().findIndex(c => c.id === restoredCard.id);
+      if (idx !== -1) {
+        const realIndex = incorrectCards.length - 1 - idx;
+        const newIncorrect = incorrectCards.slice();
+        newIncorrect.splice(realIndex, 1);
+        setIncorrectCards(newIncorrect);
+      }
+    }
+
+    // Update stats
+    setSessionStats(prev => ({
+      ...prev,
+      correct: lastAction.wasCorrect ? Math.max(prev.correct - 1, 0) : prev.correct,
+      incorrect: lastAction.wasCorrect ? prev.incorrect : Math.max(prev.incorrect - 1, 0)
+    }));
+
+    // Move back one card
+    setCurrentIndex(currentIndex - 1);
+    setIsFlipped(false);
+    setStartTime(Date.now());
+
+    // Pop history
+    setActionHistory(prev => prev.slice(0, -1));
   };
 
   const handleSpeak = () => {
@@ -248,6 +291,14 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
             className="btn btn-success"
           >
             Đúng ✅
+          </button>
+          <button 
+            onClick={handleUndo}
+            className="btn btn-secondary"
+            disabled={currentIndex === 0 || actionHistory.length === 0}
+            title={currentIndex === 0 ? 'Không thể quay lại' : 'Hoàn tác bước vừa rồi'}
+          >
+            ↩️ Undo
           </button>
         </div>
       )}

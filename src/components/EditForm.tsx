@@ -61,6 +61,24 @@ const EditForm: React.FC<EditFormProps> = ({ card, onSave, onCancel }) => {
         />
       </div>
 
+      <div className="input-group">
+        <label>Cấp độ (0-5)</label>
+        <input
+          type="number"
+          min={0}
+          max={5}
+          value={card.currentLevel}
+          onChange={(e) => {
+            const level = Math.max(0, Math.min(5, Number(e.target.value)));
+            // Cập nhật tạm trong state thô để khi lưu sẽ dùng giá trị mới
+            (card as any).currentLevel = level;
+          }}
+        />
+        <div style={{ color: '#6b7280', fontSize: '12px' }}>
+          Đặt cấp độ để điều chỉnh lịch ôn. 0 = thẻ mới; 5 = cấp cao nhất.
+        </div>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
         <button onClick={onCancel} className="btn btn-secondary">
           Hủy
