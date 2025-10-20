@@ -198,7 +198,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
             break;
           }
         } catch (error) {
-          console.log(`Proxy ${i + 1} failed:`, error.message);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.log(`Proxy ${i + 1} failed:`, errorMessage);
           lastError = error;
           if (i === proxies.length - 1) {
             throw lastError; // All proxies failed
@@ -226,7 +227,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       }
     } catch (e) {
       console.error('Quizlet import error:', e);
-      setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${e.message}. Vui lòng kiểm tra mạng và thử lại.`);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${errorMessage}. Vui lòng kiểm tra mạng và thử lại.`);
     } finally {
       setIsFetchingQuizlet(false);
     }
