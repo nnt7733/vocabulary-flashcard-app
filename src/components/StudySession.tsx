@@ -55,14 +55,21 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       // Prioritize the best quality US English voices
       const voices = window.speechSynthesis.getVoices();
       
-      // Priority order: Google US > Microsoft Natural > Microsoft > any en-US
+      // Priority order: British English (Cambridge style) > US English
       const voicePriority = [
+        // British English voices (Cambridge-like)
+        'Google UK English Female',
+        'Google UK English Male',
+        'Microsoft Libby Online (Natural) - English (United Kingdom)',
+        'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+        'Microsoft Susan - English (United Kingdom)',
+        'Microsoft Hazel - English (United Kingdom)',
+        'Microsoft George - English (United Kingdom)',
+        // US English fallback
         'Google US English',
         'Microsoft Aria Online (Natural) - English (United States)',
         'Microsoft Mark - English (United States)',
         'Microsoft Zira - English (United States)',
-        'Google UK English Female',
-        'Google UK English Male',
       ];
       
       let selectedVoice = null;
@@ -73,17 +80,30 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         if (selectedVoice) break;
       }
       
-      // Fallback: Find any high-quality en-US voice
+      // Fallback: Find any high-quality en-GB (British) voice
       if (!selectedVoice) {
         selectedVoice = voices.find(v => 
-          v.lang === 'en-US' && 
+          v.lang === 'en-GB' && 
           (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
         );
       }
       
-      // Last resort: Any en-US voice
+      // Fallback 2: Any en-GB voice
       if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang === 'en-US' || v.lang.startsWith('en-'));
+        selectedVoice = voices.find(v => v.lang === 'en-GB');
+      }
+      
+      // Fallback 3: Any high-quality en-US voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => 
+          v.lang === 'en-US' && 
+          (v.name.includes('Google') || v.name.includes('Natural'))
+        );
+      }
+      
+      // Last resort: Any English voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.startsWith('en-'));
       }
       
       if (selectedVoice) {
