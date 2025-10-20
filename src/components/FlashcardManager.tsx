@@ -297,6 +297,8 @@ const FlashcardManager: React.FC = () => {
                 onClick={handleStartStudy}
                 className="btn btn-success"
                 disabled={cardsForReview.length === 0}
+                title={cardsForReview.length === 0 ? 'Không có thẻ cần ôn hôm nay' : 'Bắt đầu học'}
+                style={cardsForReview.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
               >
                 🚀 Bắt đầu học
               </button>

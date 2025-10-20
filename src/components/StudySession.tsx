@@ -55,21 +55,21 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       // Prioritize the best quality US English voices
       const voices = window.speechSynthesis.getVoices();
       
-      // Priority order: British English (Cambridge style) > US English
+      // Priority order: US English (per user preference), then UK
       const voicePriority = [
-        // British English voices (Cambridge-like)
+        // US English voices
+        'Google US English',
+        'Microsoft Aria Online (Natural) - English (United States)',
+        'Microsoft Mark - English (United States)',
+        'Microsoft Zira - English (United States)',
+        // UK English fallback (Cambridge-like)
         'Google UK English Female',
         'Google UK English Male',
         'Microsoft Libby Online (Natural) - English (United Kingdom)',
         'Microsoft Ryan Online (Natural) - English (United Kingdom)',
         'Microsoft Susan - English (United Kingdom)',
         'Microsoft Hazel - English (United Kingdom)',
-        'Microsoft George - English (United Kingdom)',
-        // US English fallback
-        'Google US English',
-        'Microsoft Aria Online (Natural) - English (United States)',
-        'Microsoft Mark - English (United States)',
-        'Microsoft Zira - English (United States)',
+        'Microsoft George - English (United Kingdom)'
       ];
       
       let selectedVoice = null;
@@ -80,23 +80,23 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         if (selectedVoice) break;
       }
       
-      // Fallback: Find any high-quality en-GB (British) voice
+      // Fallback: Find any high-quality en-US voice
       if (!selectedVoice) {
         selectedVoice = voices.find(v => 
-          v.lang === 'en-GB' && 
+          v.lang === 'en-US' && 
           (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
         );
       }
       
-      // Fallback 2: Any en-GB voice
+      // Fallback 2: Any en-US voice
       if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang === 'en-GB');
+        selectedVoice = voices.find(v => v.lang === 'en-US');
       }
       
-      // Fallback 3: Any high-quality en-US voice
+      // Fallback 3: Any high-quality en-GB voice
       if (!selectedVoice) {
         selectedVoice = voices.find(v => 
-          v.lang === 'en-US' && 
+          v.lang === 'en-GB' && 
           (v.name.includes('Google') || v.name.includes('Natural'))
         );
       }
@@ -145,11 +145,16 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       setIsFlipped(false);
       setStartTime(Date.now());
     } else {
-      // Session finished - show summary
+      // Session finished - include the last answered card state and incorrect list
       const finalCards = cards.map(card => 
         newUpdatedCardsMap.get(card.id) || card
       );
-      onComplete(finalCards, incorrectCards);
+
+      const finalIncorrect = correct
+        ? incorrectCards
+        : [...incorrectCards, newUpdatedCardsMap.get(currentCard.id) as Flashcard];
+
+      onComplete(finalCards, finalIncorrect);
     }
   };
 
