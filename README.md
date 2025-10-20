@@ -181,26 +181,7 @@ Nếu ứng dụng này hữu ích với bạn, hãy ủng hộ tác giả để
 **💳 Số tài khoản:** `0396202885`  
 **👤 Tên tài khoản:** `NGUYEN NGOC THOAI`
 
-### 📱 QR Code
-
-<div align="center">
-
-**🔧 Cách tạo QR Code chuyển khoản MB Bank:**
-
-1. **Mở app MB Bank** trên điện thoại
-2. **Đăng nhập** vào tài khoản
-3. **Chọn "Quét QR"** → **"QR nhận tiền"**
-4. **Lưu QR code** và upload lên đây
-
-**📱 Hoặc sử dụng QR Code Generator:**
-- Vào [MB Bank QR Generator](https://mbbank.com.vn/qr-generator)
-- Nhập: **0396202885**
-- Tên: **NGUYEN NGOC THOAI**
-- Tạo và tải QR code
-
-**📋 Xem hướng dẫn chi tiết:** [DONATE.md](DONATE.md)
-
-</div>
+*Chuyển khoản trực tiếp qua app ngân hàng hoặc ATM*
 
 </div>
 

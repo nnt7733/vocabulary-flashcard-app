@@ -10,53 +10,34 @@ Nếu ứng dụng **Vocabulary Flashcard App** hữu ích với bạn, hãy ủ
 
 ---
 
-## 📱 Cách tạo QR Code chuyển khoản
+## 💳 Cách chuyển khoản
 
-### **Phương pháp 1: Sử dụng app MB Bank (Khuyến nghị)**
+### **Phương pháp 1: App ngân hàng (Khuyến nghị)**
 
-1. **Mở ứng dụng MB Bank** trên điện thoại
-2. **Đăng nhập** vào tài khoản của bạn
-3. **Tìm biểu tượng "Quét QR"** hoặc **"QR Code"**
-4. **Chọn "QR nhận tiền"** hoặc **"Tạo QR nhận tiền"**
-5. **Nhập thông tin:**
-   - Số tài khoản: `0396202885`
-   - Tên: `NGUYEN NGOC THOAI`
-   - Số tiền: (tùy chọn)
-6. **Tạo QR code** và lưu vào điện thoại
-7. **Upload QR code** lên GitHub repository
-
-### **Phương pháp 2: Sử dụng website MB Bank**
-
-1. **Truy cập:** [https://mbbank.com.vn](https://mbbank.com.vn)
-2. **Đăng nhập** vào tài khoản online banking
-3. **Tìm mục "QR Code"** hoặc **"Tạo QR nhận tiền"**
-4. **Nhập thông tin** như trên
-5. **Tải QR code** về máy
-
-### **Phương pháp 3: Sử dụng QR Generator online**
-
-1. **Truy cập:** [QR Code Generator](https://www.qr-code-generator.com/)
-2. **Chọn "Bank Transfer"** hoặc **"Payment"**
+1. **Mở app ngân hàng** của bạn (MB Bank, Vietcombank, BIDV, v.v.)
+2. **Chọn "Chuyển khoản"** hoặc **"Transfer"**
 3. **Nhập thông tin:**
-   - Bank: MB Bank
-   - Account Number: 0396202885
-   - Account Name: NGUYEN NGOC THOAI
-4. **Tạo và tải** QR code
+   - Ngân hàng: **MB Bank**
+   - Số tài khoản: **0396202885**
+   - Tên: **NGUYEN NGOC THOAI**
+4. **Nhập số tiền** và **nội dung chuyển khoản**
+5. **Xác nhận** và hoàn tất
 
----
+### **Phương pháp 2: ATM**
 
-## 🎯 Cách sử dụng QR Code
+1. **Đến máy ATM** gần nhất
+2. **Chọn "Chuyển khoản"**
+3. **Nhập số tài khoản:** **0396202885**
+4. **Chọn ngân hàng:** **MB Bank**
+5. **Nhập số tiền** và **xác nhận**
 
-### **Để chuyển tiền:**
-1. **Mở app ngân hàng** của bạn
-2. **Chọn "Chuyển khoản"** → **"Quét QR"**
-3. **Quét QR code** từ repository
-4. **Nhập số tiền** và **xác nhận**
+### **Phương pháp 3: Internet Banking**
 
-### **Để chia sẻ:**
-1. **Lưu QR code** vào điện thoại
-2. **Chia sẻ** qua WeChat, Zalo, Facebook
-3. **Người nhận** quét QR để chuyển tiền
+1. **Truy cập** website ngân hàng của bạn
+2. **Đăng nhập** tài khoản
+3. **Chọn "Chuyển khoản"**
+4. **Nhập thông tin** như trên
+5. **Xác nhận** giao dịch
 
 ---
 
