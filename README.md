@@ -195,7 +195,7 @@ Nếu ứng dụng này hữu ích với bạn, hãy ủng hộ tác giả để
 **📱 Hoặc sử dụng QR Code Generator:**
 - Vào [MB Bank QR Generator](https://mbbank.com.vn/qr-generator)
 - Nhập: **0396202885**
-- Tên: **NGUYEN THANH THOAI**
+- Tên: **NGUYEN NGOC THOAI**
 - Tạo và tải QR code
 
 **📋 Xem hướng dẫn chi tiết:** [DONATE.md](DONATE.md)

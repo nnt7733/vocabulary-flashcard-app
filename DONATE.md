@@ -6,7 +6,7 @@ Nếu ứng dụng **Vocabulary Flashcard App** hữu ích với bạn, hãy ủ
 
 ### **🏦 Ngân hàng:** MB Bank (Military Commercial Joint Stock Bank)
 ### **💳 Số tài khoản:** `0396202885`
-### **👤 Tên tài khoản:** `NGUYEN THANH THOAI`
+### **👤 Tên tài khoản:** `NGUYEN NGOC THOAI`
 
 ---
 
@@ -20,7 +20,7 @@ Nếu ứng dụng **Vocabulary Flashcard App** hữu ích với bạn, hãy ủ
 4. **Chọn "QR nhận tiền"** hoặc **"Tạo QR nhận tiền"**
 5. **Nhập thông tin:**
    - Số tài khoản: `0396202885`
-   - Tên: `NGUYEN THANH THOAI`
+   - Tên: `NGUYEN NGOC THOAI`
    - Số tiền: (tùy chọn)
 6. **Tạo QR code** và lưu vào điện thoại
 7. **Upload QR code** lên GitHub repository
@@ -40,7 +40,7 @@ Nếu ứng dụng **Vocabulary Flashcard App** hữu ích với bạn, hãy ủ
 3. **Nhập thông tin:**
    - Bank: MB Bank
    - Account Number: 0396202885
-   - Account Name: NGUYEN THANH THOAI
+   - Account Name: NGUYEN NGOC THOAI
 4. **Tạo và tải** QR code
 
 ---
