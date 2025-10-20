@@ -25,6 +25,20 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
   useEffect(() => {
     setStartTime(Date.now());
+    
+    // Load voices on component mount
+    if ('speechSynthesis' in window) {
+      // Some browsers need this to load voices
+      window.speechSynthesis.getVoices();
+      
+      // Listen for voices loaded event
+      if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = () => {
+          const voices = window.speechSynthesis.getVoices();
+          console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`));
+        };
+      }
+    }
   }, []);
 
   const speakText = (text: string) => {
@@ -34,19 +48,47 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 0.9; // Tốc độ tự nhiên hơn
+      utterance.rate = 1.0; // Tốc độ gốc tự nhiên
       utterance.pitch = 1.0; // Cao độ tự nhiên
       utterance.volume = 1.0; // Âm lượng tối đa
       
-      // Try to use a high-quality US English voice
+      // Prioritize the best quality US English voices
       const voices = window.speechSynthesis.getVoices();
-      const usVoice = voices.find(voice => 
-        voice.lang === 'en-US' && 
-        (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Natural'))
-      ) || voices.find(voice => voice.lang === 'en-US');
       
-      if (usVoice) {
-        utterance.voice = usVoice;
+      // Priority order: Google US > Microsoft Natural > Microsoft > any en-US
+      const voicePriority = [
+        'Google US English',
+        'Microsoft Aria Online (Natural) - English (United States)',
+        'Microsoft Mark - English (United States)',
+        'Microsoft Zira - English (United States)',
+        'Google UK English Female',
+        'Google UK English Male',
+      ];
+      
+      let selectedVoice = null;
+      
+      // Try to find voice by exact name
+      for (const voiceName of voicePriority) {
+        selectedVoice = voices.find(v => v.name === voiceName);
+        if (selectedVoice) break;
+      }
+      
+      // Fallback: Find any high-quality en-US voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => 
+          v.lang === 'en-US' && 
+          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
+        );
+      }
+      
+      // Last resort: Any en-US voice
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang === 'en-US' || v.lang.startsWith('en-'));
+      }
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        console.log('Using voice:', selectedVoice.name); // Debug log
       }
       
       window.speechSynthesis.speak(utterance);
