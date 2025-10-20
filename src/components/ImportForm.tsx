@@ -264,7 +264,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         </button>
       </div>
       
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
         <button
           className="btn btn-secondary"
           onClick={() => {
@@ -289,8 +289,12 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
           className="btn btn-primary"
           disabled={isFetchingQuizlet || !quizletUrl}
         >
-          {isFetchingQuizlet ? 'Đang lấy...' : 'Import từ URL Quizlet'}
+          {isFetchingQuizlet ? 'Đang lấy...' : 'Import từ URL Quizlet (đang phát triển)'}
         </button>
+      </div>
+      <div style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
+        💡 Tính năng Import URL đang phát triển. Khuyến nghị dùng Export trên Quizlet:
+        Mở set → Menu ⋯ → Export → Copy text → dán vào khung "Nhập thủ công" bên dưới.
       </div>
       {quizletError && (
         <div style={{ color: '#b91c1c', marginTop: '-8px', marginBottom: '8px' }}>{quizletError}</div>
