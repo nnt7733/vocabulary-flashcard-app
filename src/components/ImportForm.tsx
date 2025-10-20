@@ -59,37 +59,97 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
 
     const cards: { term: string; definition: string }[] = [];
 
-    // Strategy A: inline separator within a single line
+    // Strategy A: Look for Quizlet-specific patterns
+    // Pattern 1: "term" - "definition" or "term" — "definition"
     for (const line of lines) {
-      const sep = [' — ', ' – ', ' - ', ' : '].find(s => line.includes(s));
-      if (sep) {
-        const [term, ...rest] = line.split(sep);
-        const definition = rest.join(sep).trim();
-        if (term && definition) {
-          cards.push({ term: term.trim(), definition });
+      const separators = [' — ', ' – ', ' - ', ' : ', ' → ', ' →', '→ '];
+      for (const sep of separators) {
+        if (line.includes(sep)) {
+          const [term, ...rest] = line.split(sep);
+          const definition = rest.join(sep).trim();
+          if (term && definition && term.length <= 200 && definition.length <= 500) {
+            cards.push({ term: term.trim(), definition });
+            break; // Only use first separator found
+          }
         }
       }
     }
 
-    // Strategy B: alternating lines
+    // Strategy B: Look for numbered lists or bullet points
+    if (cards.length === 0) {
+      for (const line of lines) {
+        const numberedMatch = line.match(/^\d+\.\s*(.+?)\s*[-–—:]\s*(.+)$/);
+        if (numberedMatch) {
+          const [, term, definition] = numberedMatch;
+          if (term && definition) {
+            cards.push({ term: term.trim(), definition: definition.trim() });
+          }
+        }
+      }
+    }
+
+    // Strategy C: Look for HTML-like patterns (if any HTML leaked through)
+    if (cards.length === 0) {
+      for (const line of lines) {
+        const htmlMatch = line.match(/<[^>]*>([^<]+)<[^>]*>\s*[-–—:]\s*<[^>]*>([^<]+)<[^>]*>/);
+        if (htmlMatch) {
+          const [, term, definition] = htmlMatch;
+          if (term && definition) {
+            cards.push({ term: term.trim(), definition: definition.trim() });
+          }
+        }
+      }
+    }
+
+    // Strategy D: alternating lines (fallback)
     if (cards.length === 0) {
       for (let i = 0; i + 1 < lines.length; i += 2) {
         const term = lines[i];
         const definition = lines[i + 1];
-        const headingLike = /^(Terms in this set|Definition|Định nghĩa|Thuật ngữ|Từ vựng)/i;
-        if (!headingLike.test(term) && term && definition) {
+        const headingLike = /^(Terms in this set|Definition|Định nghĩa|Thuật ngữ|Từ vựng|Flashcards|Cards)/i;
+        const tooShort = term.length < 2 || definition.length < 2;
+        const tooLong = term.length > 200 || definition.length > 500;
+        
+        if (!headingLike.test(term) && !tooShort && !tooLong && term && definition) {
           cards.push({ term, definition });
         }
       }
     }
 
-    // Deduplicate
+    // Strategy E: Look for any line with common separators
+    if (cards.length === 0) {
+      for (const line of lines) {
+        const separators = ['\t', ' | ', ' |', '| ', ' : ', ' :', ': '];
+        for (const sep of separators) {
+          if (line.includes(sep)) {
+            const [term, ...rest] = line.split(sep);
+            const definition = rest.join(sep).trim();
+            if (term && definition && term.length <= 200 && definition.length <= 500) {
+              cards.push({ term: term.trim(), definition });
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Clean up and deduplicate
+    const cleaned = cards.map(card => ({
+      term: card.term.replace(/^["']|["']$/g, '').trim(), // Remove quotes
+      definition: card.definition.replace(/^["']|["']$/g, '').trim()
+    })).filter(card => 
+      card.term.length > 0 && 
+      card.definition.length > 0 &&
+      !/^(term|definition|word|meaning)$/i.test(card.term) // Filter out obvious headers
+    );
+
     const unique: { term: string; definition: string }[] = [];
-    for (const c of cards) {
+    for (const c of cleaned) {
       if (!unique.find(u => u.term === c.term && u.definition === c.definition)) {
         unique.push(c);
       }
     }
+    
     return unique;
   }
 
@@ -102,12 +162,28 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     }
     try {
       setIsFetchingQuizlet(true);
+      
+      // Normalize URL - remove /vn/ and other language prefixes
+      let normalizedUrl = url.replace(/^https?:\/\//i, '');
+      normalizedUrl = normalizedUrl.replace(/\/vn\//, '/');
+      normalizedUrl = normalizedUrl.replace(/\/[a-z]{2}\//, '/'); // Remove other language codes
+      
       // Use r.jina.ai to fetch readable page content (bypasses CORS)
-      const normalized = url.replace(/^https?:\/\//i, '');
-      const proxyUrl = `https://r.jina.ai/http://${normalized}`;
+      const proxyUrl = `https://r.jina.ai/http://${normalizedUrl}`;
+      console.log('Fetching from:', proxyUrl);
+      
       const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
       const text = await res.text();
+      console.log('Fetched text length:', text.length);
+      console.log('First 500 chars:', text.substring(0, 500));
+      
       const parsed = parseQuizletReadableText(text);
+      console.log('Parsed cards:', parsed.length);
+      
       if (parsed.length === 0) {
         setQuizletError('Không đọc được dữ liệu từ URL này. Hãy thử dùng Export trên Quizlet rồi dán vào khung nhập thủ công.');
         setPreviewCards([]);
@@ -115,7 +191,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         setPreviewCards(parsed);
       }
     } catch (e) {
-      setQuizletError('Không thể tải dữ liệu từ Quizlet. Vui lòng kiểm tra mạng và thử lại.');
+      console.error('Quizlet import error:', e);
+      setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${e.message}. Vui lòng kiểm tra mạng và thử lại.`);
     } finally {
       setIsFetchingQuizlet(false);
     }
