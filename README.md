@@ -183,9 +183,24 @@ Nếu ứng dụng này hữu ích với bạn, hãy ủng hộ tác giả để
 
 ### 📱 QR Code
 
-![QR Code](https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=MB%20Bank%20%7C%200396202885%20%7C%20NGUYEN%20THANH%20THOAI)
+<div align="center">
 
-*Quét mã QR để chuyển khoản nhanh chóng*
+**🔧 Cách tạo QR Code chuyển khoản MB Bank:**
+
+1. **Mở app MB Bank** trên điện thoại
+2. **Đăng nhập** vào tài khoản
+3. **Chọn "Quét QR"** → **"QR nhận tiền"**
+4. **Lưu QR code** và upload lên đây
+
+**📱 Hoặc sử dụng QR Code Generator:**
+- Vào [MB Bank QR Generator](https://mbbank.com.vn/qr-generator)
+- Nhập: **0396202885**
+- Tên: **NGUYEN THANH THOAI**
+- Tạo và tải QR code
+
+**📋 Xem hướng dẫn chi tiết:** [DONATE.md](DONATE.md)
+
+</div>
 
 </div>
 
