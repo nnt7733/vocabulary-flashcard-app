@@ -13,6 +13,10 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   const [customTermDelimiter, setCustomTermDelimiter] = useState('');
   const [customCardSeparator, setCustomCardSeparator] = useState('');
   const [previewCards, setPreviewCards] = useState<{ term: string; definition: string }[]>([]);
+  // Quizlet URL import states
+  const [quizletUrl, setQuizletUrl] = useState('');
+  const [isFetchingQuizlet, setIsFetchingQuizlet] = useState(false);
+  const [quizletError, setQuizletError] = useState<string | null>(null);
 
   const parseCards = React.useCallback(() => {
     if (!inputText.trim()) {
@@ -46,6 +50,77 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     parseCards();
   }, [parseCards]);
 
+  // Parse readable text fetched from Quizlet page via proxy
+  function parseQuizletReadableText(text: string): { term: string; definition: string }[] {
+    const lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    const cards: { term: string; definition: string }[] = [];
+
+    // Strategy A: inline separator within a single line
+    for (const line of lines) {
+      const sep = [' — ', ' – ', ' - ', ' : '].find(s => line.includes(s));
+      if (sep) {
+        const [term, ...rest] = line.split(sep);
+        const definition = rest.join(sep).trim();
+        if (term && definition) {
+          cards.push({ term: term.trim(), definition });
+        }
+      }
+    }
+
+    // Strategy B: alternating lines
+    if (cards.length === 0) {
+      for (let i = 0; i + 1 < lines.length; i += 2) {
+        const term = lines[i];
+        const definition = lines[i + 1];
+        const headingLike = /^(Terms in this set|Definition|Định nghĩa|Thuật ngữ|Từ vựng)/i;
+        if (!headingLike.test(term) && term && definition) {
+          cards.push({ term, definition });
+        }
+      }
+    }
+
+    // Deduplicate
+    const unique: { term: string; definition: string }[] = [];
+    for (const c of cards) {
+      if (!unique.find(u => u.term === c.term && u.definition === c.definition)) {
+        unique.push(c);
+      }
+    }
+    return unique;
+  }
+
+  async function handleQuizletImport() {
+    setQuizletError(null);
+    const url = quizletUrl.trim();
+    if (!url || !/quizlet\.com\//i.test(url)) {
+      setQuizletError('Vui lòng nhập URL Quizlet hợp lệ (https://quizlet.com/...)');
+      return;
+    }
+    try {
+      setIsFetchingQuizlet(true);
+      // Use r.jina.ai to fetch readable page content (bypasses CORS)
+      const normalized = url.replace(/^https?:\/\//i, '');
+      const proxyUrl = `https://r.jina.ai/http://${normalized}`;
+      const res = await fetch(proxyUrl);
+      const text = await res.text();
+      const parsed = parseQuizletReadableText(text);
+      if (parsed.length === 0) {
+        setQuizletError('Không đọc được dữ liệu từ URL này. Hãy thử dùng Export trên Quizlet rồi dán vào khung nhập thủ công.');
+        setPreviewCards([]);
+      } else {
+        setPreviewCards(parsed);
+      }
+    } catch (e) {
+      setQuizletError('Không thể tải dữ liệu từ Quizlet. Vui lòng kiểm tra mạng và thử lại.');
+    } finally {
+      setIsFetchingQuizlet(false);
+    }
+  }
+
   const handleImport = () => {
     if (previewCards.length > 0) {
       onImport(previewCards);
@@ -72,8 +147,40 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         </button>
       </div>
       
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            setPreviewCards([]);
+            setQuizletError(null);
+            setQuizletUrl('');
+          }}
+          title="Chuyển sang nhập thủ công"
+        >
+          Nhập thủ công
+        </button>
+        <div style={{ flex: 1 }} />
+        <input
+          type="url"
+          value={quizletUrl}
+          onChange={(e) => setQuizletUrl(e.target.value)}
+          placeholder="https://quizlet.com/123456/set/..."
+          style={{ flex: 2, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px' }}
+        />
+        <button
+          onClick={handleQuizletImport}
+          className="btn btn-primary"
+          disabled={isFetchingQuizlet || !quizletUrl}
+        >
+          {isFetchingQuizlet ? 'Đang lấy...' : 'Import từ URL Quizlet'}
+        </button>
+      </div>
+      {quizletError && (
+        <div style={{ color: '#b91c1c', marginTop: '-8px', marginBottom: '8px' }}>{quizletError}</div>
+      )}
+
       <p style={{ color: '#6b7280', marginBottom: '16px' }}>
-        Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.)
+        Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.) hoặc dùng ô bên trên để nhập từ URL Quizlet.
       </p>
 
       <div className="input-group">
