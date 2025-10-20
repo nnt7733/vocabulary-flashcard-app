@@ -172,7 +172,9 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       const proxies = [
         `https://api.allorigins.win/raw?url=${encodeURIComponent('https://' + normalizedUrl)}`,
         `https://cors-anywhere.herokuapp.com/https://${normalizedUrl}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://' + normalizedUrl)}`
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://' + normalizedUrl)}`,
+        `https://thingproxy.freeboard.io/fetch/https://${normalizedUrl}`,
+        `https://corsproxy.io/?${encodeURIComponent('https://' + normalizedUrl)}`
       ];
       
       let text = '';
@@ -212,14 +214,16 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       
       if (parsed.length === 0) {
         setQuizletError(`
-          Không đọc được dữ liệu từ URL này. 
+          ❌ Không thể lấy dữ liệu trực tiếp từ URL Quizlet.
           
-          🔧 Cách khác để import từ Quizlet:
-          1. Mở URL Quizlet trong trình duyệt
+          🔧 Cách import từ Quizlet (100% hoạt động):
+          1. Mở URL Quizlet trong tab mới: ${url}
           2. Nhấn nút "Export" (thường ở góc phải)
           3. Chọn "Copy text" 
           4. Dán vào khung "Nhập thủ công" bên dưới
           5. Chọn delimiter phù hợp (Tab hoặc Comma)
+          
+          💡 Lý do: Quizlet có bảo mật chống bot rất mạnh, các proxy service đều bị block.
         `);
         setPreviewCards([]);
       } else {
