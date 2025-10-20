@@ -29,10 +29,27 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 0.8;
-      speechSynthesis.speak(utterance);
+      utterance.rate = 0.9; // Tốc độ tự nhiên hơn
+      utterance.pitch = 1.0; // Cao độ tự nhiên
+      utterance.volume = 1.0; // Âm lượng tối đa
+      
+      // Try to use a high-quality US English voice
+      const voices = window.speechSynthesis.getVoices();
+      const usVoice = voices.find(voice => 
+        voice.lang === 'en-US' && 
+        (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Natural'))
+      ) || voices.find(voice => voice.lang === 'en-US');
+      
+      if (usVoice) {
+        utterance.voice = usVoice;
+      }
+      
+      window.speechSynthesis.speak(utterance);
     }
   };
 
@@ -111,31 +128,35 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       </div>
 
       <div className="flashcard" onClick={handleFlip}>
-        <div className="term">
-          {isFlipped ? currentCard.definition : currentCard.term}
+        <div className="term" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+          {isFlipped ? currentCard.definition : (
+            <>
+              {currentCard.term}
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSpeak();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '28px',
+                  cursor: 'pointer',
+                  color: '#4f46e5',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'transform 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                title="Phát âm (en-US)"
+              >
+                🔊
+              </button>
+            </>
+          )}
         </div>
-        {isFlipped && (
-          <div className="pronunciation">
-            {currentCard.term}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSpeak();
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                marginLeft: '8px',
-                color: '#4f46e5'
-              }}
-              title="Phát âm"
-            >
-              🔊
-            </button>
-          </div>
-        )}
         <div style={{ 
           position: 'absolute', 
           bottom: '16px', 
