@@ -179,7 +179,7 @@ Nếu ứng dụng này hữu ích với bạn, hãy ủng hộ tác giả để
 
 **🏦 Ngân hàng:** MB Bank  
 **💳 Số tài khoản:** `0396202885`  
-**👤 Tên tài khoản:** `NGUYEN THANH THOAI`
+**👤 Tên tài khoản:** `NGUYEN NGOC THOAI`
 
 ### 📱 QR Code
 
