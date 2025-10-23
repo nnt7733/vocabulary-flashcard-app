@@ -15,6 +15,22 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   const [previewCards, setPreviewCards] = useState<{ term: string; definition: string }[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
 
+  const handleTextareaKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      const textarea = event.currentTarget;
+      const selectionStart = textarea.selectionStart ?? 0;
+      const selectionEnd = textarea.selectionEnd ?? selectionStart;
+      const newValue = `${inputText.slice(0, selectionStart)}\t${inputText.slice(selectionEnd)}`;
+      setInputText(newValue);
+
+      requestAnimationFrame(() => {
+        textarea.selectionStart = selectionStart + 1;
+        textarea.selectionEnd = selectionStart + 1;
+      });
+    }
+  }, [inputText]);
+
   const interpretDelimiter = useCallback((value: string) => {
     return value
       .replace(/\\t/g, '\t')
@@ -146,6 +162,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={handleTextareaKeyDown}
           placeholder={'Từ 1\tĐịnh nghĩa 1\nTừ 2\tĐịnh nghĩa 2'}
           className="textarea-large"
         />
