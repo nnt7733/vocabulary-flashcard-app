@@ -1,20 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Flashcard, AppState } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Flashcard } from '../types';
 import { getCardsForReview, getStudyStats } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
 import StudySession from './StudySession';
 import SessionSummary from './SessionSummary';
 import FlashcardList from './FlashcardList';
+import { useAppContext } from '../context/AppContext';
 
 const FlashcardManager: React.FC = () => {
-  const [state, setState] = useState<AppState>({
-    flashcards: [],
-    studySessions: [],
-    currentCardIndex: 0,
-    isFlipped: false,
-    isStudying: false,
-    showImportForm: false
-  });
+  const { state, dispatch } = useAppContext();
   const [showSummary, setShowSummary] = useState(false);
   const [showFlashcardList, setShowFlashcardList] = useState(false);
   const [sessionResults, setSessionResults] = useState<{
@@ -24,59 +18,9 @@ const FlashcardManager: React.FC = () => {
     updatedCards: Flashcard[];
   } | null>(null);
 
-  // Load data from localStorage on component mount
-  useEffect(() => {
-    const savedFlashcards = localStorage.getItem('flashcards');
-    const savedSessions = localStorage.getItem('studySessions');
-    
-    if (savedFlashcards) {
-      const flashcards = JSON.parse(savedFlashcards).map((card: any) => ({
-        ...card,
-        createdAt: new Date(card.createdAt),
-        nextReviewDate: new Date(card.nextReviewDate),
-        repetitions: card.repetitions.map((rep: any) => ({
-          ...rep,
-          date: new Date(rep.date)
-        }))
-      }));
-      setState(prev => ({ ...prev, flashcards }));
-    }
-    
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions).map((session: any) => ({
-        ...session,
-        date: new Date(session.date)
-      }));
-      setState(prev => ({ ...prev, studySessions: sessions }));
-    }
-  }, []);
-
-  // Save data to localStorage whenever flashcards change
-  useEffect(() => {
-    localStorage.setItem('flashcards', JSON.stringify(state.flashcards));
-  }, [state.flashcards]);
-
-  useEffect(() => {
-    localStorage.setItem('studySessions', JSON.stringify(state.studySessions));
-  }, [state.studySessions]);
-
   const handleImport = (cards: { term: string; definition: string }[]) => {
-    const newFlashcards: Flashcard[] = cards.map(card => ({
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      term: card.term,
-      definition: card.definition,
-      createdAt: new Date(),
-      repetitions: [],
-      currentLevel: 0,
-      nextReviewDate: new Date(), // New cards are immediately available
-      isNew: true
-    }));
-
-    setState(prev => ({
-      ...prev,
-      flashcards: [...prev.flashcards, ...newFlashcards],
-      showImportForm: false
-    }));
+    if (!cards.length) return;
+    dispatch({ type: 'IMPORT_FLASHCARDS', payload: { cards } });
   };
 
   const handleStartStudy = () => {
@@ -85,7 +29,7 @@ const FlashcardManager: React.FC = () => {
       alert('Không có thẻ nào cần ôn tập vào lúc này!');
       return;
     }
-    setState(prev => ({ ...prev, isStudying: true }));
+    dispatch({ type: 'START_STUDY' });
   };
 
   const handleStudyComplete = (updatedCards: Flashcard[], incorrectCards: Flashcard[]) => {
@@ -102,11 +46,7 @@ const FlashcardManager: React.FC = () => {
       return updated || card;
     });
 
-    setState(prev => ({
-      ...prev,
-      flashcards: updatedFlashcards,
-      isStudying: false
-    }));
+    dispatch({ type: 'COMPLETE_STUDY', payload: { updatedCards: updatedFlashcards } });
 
     // Show summary
     setSessionResults({
@@ -119,7 +59,7 @@ const FlashcardManager: React.FC = () => {
   };
 
   const handleExitStudy = () => {
-    setState(prev => ({ ...prev, isStudying: false }));
+    dispatch({ type: 'EXIT_STUDY' });
     setShowSummary(false);
     setSessionResults(null);
   };
@@ -127,7 +67,7 @@ const FlashcardManager: React.FC = () => {
   const handleReviewIncorrect = () => {
     if (sessionResults && sessionResults.incorrectCards.length > 0) {
       setShowSummary(false);
-      setState(prev => ({ ...prev, isStudying: true }));
+      dispatch({ type: 'START_STUDY' });
     }
   };
 
@@ -141,40 +81,26 @@ const FlashcardManager: React.FC = () => {
       totalTime: 0
     };
 
-    setState(prev => ({
-      ...prev,
-      studySessions: [...prev.studySessions, session]
-    }));
+    dispatch({ type: 'ADD_STUDY_SESSION', payload: session });
 
     setShowSummary(false);
     setSessionResults(null);
   };
 
   const handleUpdateCard = (updatedCard: Flashcard) => {
-    setState(prev => ({
-      ...prev,
-      flashcards: prev.flashcards.map(card => 
-        card.id === updatedCard.id ? updatedCard : card
-      )
-    }));
+    dispatch({ type: 'UPDATE_FLASHCARD', payload: updatedCard });
   };
 
   const handleDeleteCard = (cardId: string) => {
-    setState(prev => ({
-      ...prev,
-      flashcards: prev.flashcards.filter(card => card.id !== cardId)
-    }));
+    dispatch({ type: 'DELETE_FLASHCARD', payload: cardId });
   };
 
   const handleDeleteAllCards = () => {
-    setState(prev => ({
-      ...prev,
-      flashcards: []
-    }));
+    dispatch({ type: 'DELETE_ALL_FLASHCARDS' });
   };
 
-  const stats = getStudyStats(state.flashcards);
-  const cardsForReview = getCardsForReview(state.flashcards);
+  const stats = useMemo(() => getStudyStats(state.flashcards), [state.flashcards]);
+  const cardsForReview = useMemo(() => getCardsForReview(state.flashcards), [state.flashcards]);
 
   if (showSummary && sessionResults) {
     return (
@@ -243,7 +169,7 @@ const FlashcardManager: React.FC = () => {
       {state.showImportForm ? (
         <ImportForm
           onImport={handleImport}
-          onClose={() => setState(prev => ({ ...prev, showImportForm: false }))}
+          onClose={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: false })}
         />
       ) : (
         <>
@@ -281,7 +207,7 @@ const FlashcardManager: React.FC = () => {
 
             <div className="controls">
               <button
-                onClick={() => setState(prev => ({ ...prev, showImportForm: true }))}
+                onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
                 className="btn btn-primary"
               >
                 ➕ Thêm từ mới
@@ -337,7 +263,7 @@ const FlashcardManager: React.FC = () => {
                 <h3>Chưa có thẻ nào</h3>
                 <p>Hãy thêm một số từ vựng mới để bắt đầu học tập!</p>
                 <button
-                  onClick={() => setState(prev => ({ ...prev, showImportForm: true }))}
+                  onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
                   className="btn btn-primary"
                 >
                   Thêm từ mới
