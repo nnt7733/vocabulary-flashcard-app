@@ -2,10 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Flashcard } from '../types';
 import { getCardsForReview, getStudyStats } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
-import StudySession from './StudySession';
+import StudySession, { StudySessionResult } from './StudySession';
 import SessionSummary from './SessionSummary';
 import FlashcardList from './FlashcardList';
 import { useAppContext } from '../context/AppContext';
+import LearningProgressTable from './LearningProgressTable';
 
 const FlashcardManager: React.FC = () => {
   const { state, dispatch, storageError, clearStorageError } = useAppContext();
@@ -15,7 +16,9 @@ const FlashcardManager: React.FC = () => {
     correctCount: number;
     incorrectCount: number;
     incorrectCards: Flashcard[];
-    updatedCards: Flashcard[];
+    durationMinutes: number;
+    startedAt: Date;
+    finishedAt: Date;
   } | null>(null);
 
   const handleImport = (cards: { term: string; definition: string }[]) => {
@@ -32,15 +35,7 @@ const FlashcardManager: React.FC = () => {
     dispatch({ type: 'START_STUDY' });
   };
 
-  const handleStudyComplete = (updatedCards: Flashcard[], incorrectCards: Flashcard[]) => {
-    // Count correct and incorrect answers from the last repetition
-    const correctCount = updatedCards.filter(card => 
-      card.repetitions.length > 0 && 
-      card.repetitions[card.repetitions.length - 1].correct
-    ).length;
-    const incorrectCount = updatedCards.length - correctCount;
-
-    // Update flashcards with new data
+  const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt }: StudySessionResult) => {
     const updatedFlashcards = state.flashcards.map(card => {
       const updated = updatedCards.find(uc => uc.id === card.id);
       return updated || card;
@@ -48,12 +43,15 @@ const FlashcardManager: React.FC = () => {
 
     dispatch({ type: 'COMPLETE_STUDY', payload: { updatedCards: updatedFlashcards } });
 
-    // Show summary
+    const durationMinutes = Math.round((durationMs / 60000) * 100) / 100;
+
     setSessionResults({
-      correctCount,
-      incorrectCount,
+      correctCount: stats.correct,
+      incorrectCount: stats.incorrect,
       incorrectCards,
-      updatedCards: updatedFlashcards
+      durationMinutes,
+      startedAt,
+      finishedAt
     });
     setShowSummary(true);
   };
@@ -72,13 +70,14 @@ const FlashcardManager: React.FC = () => {
   };
 
   const handleFinishSession = () => {
-    const now = new Date();
+    const now = sessionResults?.finishedAt ?? new Date();
+    const cardsStudied = (sessionResults?.correctCount || 0) + (sessionResults?.incorrectCount || 0);
     const session = {
       id: Date.now().toString(),
       date: now,
-      cardsStudied: (sessionResults?.correctCount || 0) + (sessionResults?.incorrectCount || 0),
+      cardsStudied,
       correctAnswers: sessionResults?.correctCount || 0,
-      totalTime: 0
+      totalTime: sessionResults ? Number(sessionResults.durationMinutes.toFixed(2)) : 0
     };
 
     dispatch({ type: 'ADD_STUDY_SESSION', payload: session });
@@ -136,6 +135,7 @@ const FlashcardManager: React.FC = () => {
           correctCount={sessionResults.correctCount}
           incorrectCount={sessionResults.incorrectCount}
           incorrectCards={sessionResults.incorrectCards}
+          durationMinutes={sessionResults.durationMinutes}
           onReviewIncorrect={handleReviewIncorrect}
           onFinish={handleFinishSession}
         />
@@ -224,6 +224,8 @@ const FlashcardManager: React.FC = () => {
               <div className="stat-label">Đã hoàn thành</div>
             </div>
           </div>
+
+          <LearningProgressTable sessions={state.studySessions} />
 
           <div className="card">
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>

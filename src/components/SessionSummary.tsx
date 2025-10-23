@@ -5,6 +5,7 @@ interface SessionSummaryProps {
   correctCount: number;
   incorrectCount: number;
   incorrectCards: Flashcard[];
+  durationMinutes: number;
   onReviewIncorrect: () => void;
   onFinish: () => void;
 }
@@ -13,11 +14,17 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
   correctCount,
   incorrectCount,
   incorrectCards,
+  durationMinutes,
   onReviewIncorrect,
   onFinish
 }) => {
   const totalCards = correctCount + incorrectCount;
   const accuracy = Math.round((correctCount / totalCards) * 100) || 0;
+  const formattedDuration = durationMinutes <= 0
+    ? 'Dưới 0.1 phút'
+    : durationMinutes >= 1
+      ? `${durationMinutes.toFixed(1)} phút`
+      : `${Math.round(durationMinutes * 60)} giây`;
 
   return (
     <div className="card">
@@ -49,10 +56,16 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
           </div>
           <div className="stat-label">Độ chính xác</div>
         </div>
+        <div className="stat-card" style={{ background: '#ede9fe' }}>
+          <div className="stat-number" style={{ color: '#7c3aed', fontSize: '20px' }}>
+            {formattedDuration}
+          </div>
+          <div className="stat-label">Thời lượng phiên</div>
+        </div>
       </div>
 
       {incorrectCards.length > 0 && (
-        <div style={{ 
+        <div style={{
           background: '#fef3c7', 
           padding: '24px', 
           borderRadius: '12px', 
