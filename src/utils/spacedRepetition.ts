@@ -17,12 +17,12 @@ export function calculateNextReviewDate(level: number, lastReviewDate: Date): Da
 }
 
 export function updateCardAfterReview(
-  card: Flashcard, 
-  correct: boolean, 
+  card: Flashcard,
+  correct: boolean,
   responseTime: number
 ): Flashcard {
   const now = new Date();
-  
+
   // Add new repetition record
   const newRepetition = {
     level: card.currentLevel,
@@ -35,16 +35,19 @@ export function updateCardAfterReview(
 
   let newLevel = card.currentLevel;
   let nextReviewDate = card.nextReviewDate;
+  let status: Flashcard['status'] = card.status ?? 'active';
 
   if (correct) {
     // Move to next level if correct
     newLevel = Math.min(card.currentLevel + 1, SPACED_REPETITION_SCHEDULE.length - 1);
     nextReviewDate = calculateNextReviewDate(newLevel, now);
+
+    status = newLevel === SPACED_REPETITION_SCHEDULE.length - 1 ? 'learned' : 'active';
   } else {
     // Check if last attempt was also incorrect (2 consecutive failures)
     const lastTwoReps = updatedRepetitions.slice(-2);
-    const twoConsecutiveFailures = lastTwoReps.length >= 2 && 
-      !lastTwoReps[0].correct && 
+    const twoConsecutiveFailures = lastTwoReps.length >= 2 &&
+      !lastTwoReps[0].correct &&
       !lastTwoReps[1].correct;
 
     if (twoConsecutiveFailures) {
@@ -54,8 +57,9 @@ export function updateCardAfterReview(
       // Decrease by 1 level (but not below 0)
       newLevel = Math.max(card.currentLevel - 1, 0);
     }
-    
+
     nextReviewDate = calculateNextReviewDate(newLevel, now);
+    status = 'active';
   }
 
   return {
@@ -63,7 +67,8 @@ export function updateCardAfterReview(
     repetitions: updatedRepetitions,
     currentLevel: newLevel,
     nextReviewDate,
-    isNew: false
+    isNew: false,
+    status
   };
 }
 
@@ -71,17 +76,20 @@ export function getCardsForReview(cards: Flashcard[]): Flashcard[] {
   const now = new Date();
   return cards.filter(card => {
     // Include new cards (level 0) or cards that are due for review
+    if (card.status === 'learned') {
+      return false;
+    }
     return card.currentLevel === 0 || card.nextReviewDate <= now;
   });
 }
 
 export function getCardsByLevel(cards: Flashcard[]): { [level: number]: Flashcard[] } {
   const cardsByLevel: { [level: number]: Flashcard[] } = {};
-  
+
   for (let i = 0; i <= 5; i++) {
-    cardsByLevel[i] = cards.filter(card => card.currentLevel === i);
+    cardsByLevel[i] = cards.filter(card => card.status !== 'learned' && card.currentLevel === i);
   }
-  
+
   return cardsByLevel;
 }
 
@@ -91,12 +99,13 @@ export function getStudyStats(cards: Flashcard[]): {
   due: number;
   byLevel: { [level: number]: number };
 } {
-  const newCards = cards.filter(card => card.isNew).length;
-  const dueCards = getCardsForReview(cards).length;
-  const byLevel = getCardsByLevel(cards);
-  
+  const activeCards = cards.filter(card => card.status !== 'learned');
+  const newCards = activeCards.filter(card => card.isNew).length;
+  const dueCards = getCardsForReview(activeCards).length;
+  const byLevel = getCardsByLevel(activeCards);
+
   return {
-    total: cards.length,
+    total: activeCards.length,
     new: newCards,
     due: dueCards,
     byLevel: Object.fromEntries(

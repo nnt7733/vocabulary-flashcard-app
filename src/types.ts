@@ -7,6 +7,7 @@ export interface Flashcard {
   currentLevel: number; // 0-5 (6 levels total)
   nextReviewDate: Date;
   isNew: boolean;
+  status?: 'active' | 'learned';
 }
 
 export interface Repetition {
