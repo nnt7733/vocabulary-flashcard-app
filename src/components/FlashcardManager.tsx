@@ -99,8 +99,18 @@ const FlashcardManager: React.FC = () => {
     dispatch({ type: 'DELETE_ALL_FLASHCARDS' });
   };
 
-  const stats = useMemo(() => getStudyStats(state.flashcards), [state.flashcards]);
-  const cardsForReview = useMemo(() => getCardsForReview(state.flashcards), [state.flashcards]);
+  const activeFlashcards = useMemo(
+    () => state.flashcards.filter(card => card.status !== 'learned'),
+    [state.flashcards]
+  );
+
+  const learnedFlashcards = useMemo(
+    () => state.flashcards.filter(card => card.status === 'learned'),
+    [state.flashcards]
+  );
+
+  const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
+  const cardsForReview = useMemo(() => getCardsForReview(activeFlashcards), [activeFlashcards]);
 
   if (showSummary && sessionResults) {
     return (
@@ -189,6 +199,10 @@ const FlashcardManager: React.FC = () => {
             <div className="stat-card">
               <div className="stat-number">{state.studySessions.length}</div>
               <div className="stat-label">Phiên học</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-number">{learnedFlashcards.length}</div>
+              <div className="stat-label">Đã hoàn thành</div>
             </div>
           </div>
 
