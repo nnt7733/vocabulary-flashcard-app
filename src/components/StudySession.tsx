@@ -1,18 +1,32 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flashcard } from '../types';
 import { updateCardAfterReview } from '../utils/spacedRepetition';
 import { useAppContext } from '../context/AppContext';
 
 interface StudySessionProps {
   cards: Flashcard[];
-  onComplete: (updatedCards: Flashcard[], incorrectCards: Flashcard[]) => void;
+  onComplete: (result: StudySessionResult) => void;
   onExit: () => void;
+}
+
+export interface StudySessionResult {
+  updatedCards: Flashcard[];
+  incorrectCards: Flashcard[];
+  stats: {
+    correct: number;
+    incorrect: number;
+    total: number;
+  };
+  startedAt: Date;
+  finishedAt: Date;
+  durationMs: number;
 }
 
 const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [startTime, setStartTime] = useState<number>(Date.now());
+  const sessionStartRef = useRef<number>(Date.now());
   const [incorrectCards, setIncorrectCards] = useState<Flashcard[]>([]);
   const [updatedCardsMap, setUpdatedCardsMap] = useState<Map<string, Flashcard>>(new Map());
   const [sessionStats, setSessionStats] = useState({
@@ -29,18 +43,30 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     hadExistingUpdate: boolean;
   }>>([]);
 
+  const totalCards = cards.length;
   const currentCard = cards[currentIndex];
-  const progress = ((currentIndex + 1) / cards.length) * 100;
+  const progress = totalCards > 0 ? ((currentIndex + 1) / totalCards) * 100 : 0;
   const { voices } = useAppContext();
 
   useEffect(() => {
+    sessionStartRef.current = Date.now();
     setStartTime(Date.now());
+    setCurrentIndex(0);
+    setIsFlipped(false);
+    setIncorrectCards([]);
+    setUpdatedCardsMap(new Map());
+    setActionHistory([]);
+    setSessionStats({
+      correct: 0,
+      incorrect: 0,
+      total: cards.length
+    });
     return () => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
     };
-  }, []);
+  }, [cards.length]);
 
   const preferredVoice = useMemo<SpeechSynthesisVoice | null>(() => {
     const availableVoices = voices.length
@@ -143,11 +169,12 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     const nextIncorrectCards = correct ? incorrectCards : [...incorrectCards, updatedCard];
     setIncorrectCards(nextIncorrectCards);
 
-    setSessionStats(prev => ({
-      ...prev,
-      correct: correct ? prev.correct + 1 : prev.correct,
-      incorrect: correct ? prev.incorrect : prev.incorrect + 1
-    }));
+    const nextStats = {
+      ...sessionStats,
+      correct: correct ? sessionStats.correct + 1 : sessionStats.correct,
+      incorrect: correct ? sessionStats.incorrect : sessionStats.incorrect + 1
+    };
+    setSessionStats(nextStats);
 
     // Move to next card
     if (currentIndex < cards.length - 1) {
@@ -161,10 +188,19 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       );
 
       const finalIncorrect = nextIncorrectCards;
+      const finishedAt = new Date();
+      const startedAt = new Date(sessionStartRef.current);
 
-      onComplete(finalCards, finalIncorrect);
+      onComplete({
+        updatedCards: finalCards,
+        incorrectCards: finalIncorrect,
+        stats: nextStats,
+        startedAt,
+        finishedAt,
+        durationMs: finishedAt.getTime() - sessionStartRef.current
+      });
     }
-  }, [cards, currentCard, currentIndex, incorrectCards, onComplete, startTime, updatedCardsMap]);
+  }, [cards, currentCard, currentIndex, incorrectCards, onComplete, sessionStats, startTime, updatedCardsMap]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
