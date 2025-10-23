@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DelimiterType, CardSeparatorType } from '../types';
-import { fetchAndParseQuizletUrl, QuizletImportError } from '../utils/quizletImporter';
 
 interface ImportFormProps {
   onImport: (cards: { term: string; definition: string }[]) => void;
@@ -14,97 +13,108 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   const [customTermDelimiter, setCustomTermDelimiter] = useState('');
   const [customCardSeparator, setCustomCardSeparator] = useState('');
   const [previewCards, setPreviewCards] = useState<{ term: string; definition: string }[]>([]);
-  // Quizlet URL import states
-  const [quizletUrl, setQuizletUrl] = useState('');
-  const [isFetchingQuizlet, setIsFetchingQuizlet] = useState(false);
-  const [quizletError, setQuizletError] = useState<string | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const interpretDelimiter = useCallback((value: string) => {
+    return value
+      .replace(/\\t/g, '\t')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r');
+  }, []);
+
+  const resolvedTermDelimiter = useMemo(() => {
+    if (termDelimiter === 'tab') {
+      return '\t';
+    }
+    if (termDelimiter === 'comma') {
+      return ',';
+    }
+    return interpretDelimiter(customTermDelimiter);
+  }, [customTermDelimiter, interpretDelimiter, termDelimiter]);
+
+  const resolvedCardSeparator = useMemo(() => {
+    if (cardSeparator === 'newline') {
+      return '\n';
+    }
+    if (cardSeparator === 'semicolon') {
+      return ';';
+    }
+    return interpretDelimiter(customCardSeparator);
+  }, [cardSeparator, customCardSeparator, interpretDelimiter]);
 
   const parseCards = useCallback(() => {
     if (!inputText.trim()) {
       setPreviewCards([]);
+      setParseError(null);
       return;
     }
 
-    const cardSeparatorValue = cardSeparator === 'custom' ? customCardSeparator : 
-      cardSeparator === 'newline' ? '\n' : ';';
-    
-    const termDelimiterValue = termDelimiter === 'custom' ? customTermDelimiter :
-      termDelimiter === 'tab' ? '\t' : ',';
+    if (!resolvedTermDelimiter) {
+      setParseError('Vui lòng nhập ký tự phân tách giữa thuật ngữ và định nghĩa.');
+      setPreviewCards([]);
+      return;
+    }
 
-    const lines = inputText.split(cardSeparatorValue).filter(line => line.trim());
+    if (!resolvedCardSeparator) {
+      setParseError('Vui lòng nhập ký tự phân tách giữa các thẻ.');
+      setPreviewCards([]);
+      return;
+    }
+
+    const normalizedText = inputText.replace(/\r\n/g, '\n');
+    const rawEntries =
+      cardSeparator === 'newline'
+        ? normalizedText.split(/\n+/)
+        : normalizedText.split(resolvedCardSeparator);
+
     const cards: { term: string; definition: string }[] = [];
+    const invalidLines: number[] = [];
 
-    lines.forEach(line => {
-      const parts = line.split(termDelimiterValue);
-      if (parts.length >= 2) {
-        cards.push({
-          term: parts[0].trim(),
-          definition: parts.slice(1).join(termDelimiterValue).trim()
-        });
+    rawEntries.forEach((rawEntry, index) => {
+      const entry = rawEntry.trim();
+      if (!entry) {
+        return;
       }
+
+      const delimiterIndex = entry.indexOf(resolvedTermDelimiter);
+      if (delimiterIndex === -1) {
+        invalidLines.push(index);
+        return;
+      }
+
+      const term = entry.slice(0, delimiterIndex).trim();
+      const definition = entry.slice(delimiterIndex + resolvedTermDelimiter.length).trim();
+
+      if (!term || !definition) {
+        invalidLines.push(index);
+        return;
+      }
+
+      cards.push({ term, definition });
     });
 
+    if (cards.length === 0) {
+      setParseError('Không tìm thấy thẻ hợp lệ. Hãy kiểm tra lại ký tự phân tách và định dạng dữ liệu.');
+    } else if (invalidLines.length > 0) {
+      const sampleLine = invalidLines[0] + 1;
+      setParseError(`Đã bỏ qua ${invalidLines.length} dòng không hợp lệ (ví dụ: dòng ${sampleLine}). Hãy kiểm tra lại định dạng các dòng này.`);
+    } else {
+      setParseError(null);
+    }
+
     setPreviewCards(cards);
-  }, [inputText, termDelimiter, cardSeparator, customTermDelimiter, customCardSeparator]);
+  }, [cardSeparator, inputText, resolvedCardSeparator, resolvedTermDelimiter]);
 
   useEffect(() => {
     parseCards();
   }, [parseCards]);
-
-  const handleQuizletImport = useCallback(async () => {
-    setQuizletError(null);
-    try {
-      setIsFetchingQuizlet(true);
-      const { cards, proxyErrors } = await fetchAndParseQuizletUrl(quizletUrl);
-
-      if (cards.length === 0) {
-        setPreviewCards([]);
-        const proxyAttempts = proxyErrors.length;
-        const guidance = [
-          '❌ Không thể lấy dữ liệu trực tiếp từ URL Quizlet.',
-          '',
-          '🔧 Cách import từ Quizlet (100% hoạt động):',
-          `1. Mở URL Quizlet trong tab mới: ${quizletUrl}`,
-          '2. Nhấn nút "Export" (thường ở góc phải)',
-          '3. Chọn "Copy text"',
-          '4. Dán vào khung "Nhập thủ công" bên dưới',
-          '5. Chọn delimiter phù hợp (Tab hoặc Comma)',
-          '',
-          `ℹ️ Đã thử ${proxyAttempts} proxy công khai${
-            proxyAttempts
-              ? `, lỗi cuối cùng: ${proxyErrors[proxyErrors.length - 1]?.message || 'Không xác định'}`
-              : ''
-          }.`
-        ].join('\n');
-        setQuizletError(guidance);
-      } else {
-        setPreviewCards(cards);
-      }
-    } catch (error) {
-      if (error instanceof QuizletImportError) {
-        const proxyAttempts = error.proxyErrors.length;
-        const lastError = error.proxyErrors[error.proxyErrors.length - 1]?.message || 'Không xác định';
-        const detailedMessage = [
-          `Không thể tải dữ liệu từ Quizlet: ${error.message}.`,
-          `Đã thử ${proxyAttempts} proxy công khai, lỗi cuối: ${lastError}.`,
-          'Vui lòng kiểm tra URL, kết nối mạng hoặc nhập dữ liệu thủ công.'
-        ].join('\n');
-        setQuizletError(detailedMessage);
-      } else {
-        const message = error instanceof Error ? error.message : String(error);
-        setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${message}. Vui lòng kiểm tra mạng và thử lại.`);
-      }
-      setPreviewCards([]);
-    } finally {
-      setIsFetchingQuizlet(false);
-    }
-  }, [quizletUrl]);
 
   const handleImport = () => {
     if (previewCards.length > 0) {
       onImport(previewCards);
       setInputText('');
       setPreviewCards([]);
+      setParseError(null);
     }
   };
 
@@ -112,12 +122,12 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     <div className="import-section">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ margin: 0, color: '#1f2937' }}>Nhập dữ liệu</h2>
-        <button 
+        <button
           onClick={onClose}
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            fontSize: '24px', 
+          style={{
+            background: 'none',
+            border: 'none',
+            fontSize: '24px',
             cursor: 'pointer',
             color: '#6b7280'
           }}
@@ -125,55 +135,27 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
           ×
         </button>
       </div>
-      
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            setPreviewCards([]);
-            setQuizletError(null);
-            setQuizletUrl('');
-          }}
-          title="Chuyển sang nhập thủ công"
-        >
-          Nhập thủ công
-        </button>
-        <div style={{ flex: 1 }} />
-        <input
-          type="url"
-          value={quizletUrl}
-          onChange={(e) => setQuizletUrl(e.target.value)}
-          placeholder="https://quizlet.com/123456/set/..."
-          style={{ flex: 2, padding: '10px', border: '1px solid #e5e7eb', borderRadius: '6px' }}
-        />
-        <button
-          onClick={handleQuizletImport}
-          className="btn btn-primary"
-          disabled={isFetchingQuizlet || !quizletUrl}
-        >
-          {isFetchingQuizlet ? 'Đang lấy...' : 'Import từ URL Quizlet (đang phát triển)'}
-        </button>
-      </div>
-      <div style={{ color: '#6b7280', fontSize: '13px', marginBottom: '16px' }}>
-        💡 Tính năng Import URL đang phát triển. Khuyến nghị dùng Export trên Quizlet:
-        Mở set → Menu ⋯ → Export → Copy text → dán vào khung "Nhập thủ công" bên dưới.
-      </div>
-      {quizletError && (
-        <div style={{ color: '#b91c1c', marginTop: '-8px', marginBottom: '8px' }}>{quizletError}</div>
-      )}
 
       <p style={{ color: '#6b7280', marginBottom: '16px' }}>
-        Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.) hoặc dùng ô bên trên để nhập từ URL Quizlet.
+        Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.). Mỗi dòng nên có định dạng:
+        <br />
+        <strong>Từ</strong> [delimiter] <strong>Định nghĩa</strong>
       </p>
 
       <div className="input-group">
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Từ 1	Định nghĩa 1&#10;Từ 2	Định nghĩa 2&#10;Từ 3	Định nghĩa 3"
+          placeholder={'Từ 1\tĐịnh nghĩa 1\nTừ 2\tĐịnh nghĩa 2'}
           className="textarea-large"
         />
       </div>
+
+      {parseError && (
+        <div style={{ color: '#b45309', background: '#fef3c7', borderRadius: '6px', padding: '12px', marginBottom: '16px', textAlign: 'left' }}>
+          {parseError}
+        </div>
+      )}
 
       <div className="delimiter-options">
         <div className="delimiter-group">
@@ -188,7 +170,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 checked={termDelimiter === 'tab'}
                 onChange={(e) => setTermDelimiter(e.target.value as DelimiterType)}
               />
-              <label htmlFor="tab">Tab</label>
+              <label htmlFor="tab">Tab (\t)</label>
             </div>
             <div className="radio-item">
               <input
@@ -199,7 +181,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 checked={termDelimiter === 'comma'}
                 onChange={(e) => setTermDelimiter(e.target.value as DelimiterType)}
               />
-              <label htmlFor="comma">Phẩy</label>
+              <label htmlFor="comma">Dấu phẩy (,)</label>
             </div>
             <div className="radio-item">
               <input
@@ -211,17 +193,18 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 onChange={(e) => setTermDelimiter(e.target.value as DelimiterType)}
               />
               <label htmlFor="custom-term">Tùy chỉnh</label>
-              {termDelimiter === 'custom' && (
-                <input
-                  type="text"
-                  value={customTermDelimiter}
-                  onChange={(e) => setCustomTermDelimiter(e.target.value)}
-                  placeholder="Nhập ký tự phân cách"
-                  style={{ width: '150px', marginLeft: '8px' }}
-                />
-              )}
             </div>
           </div>
+          {termDelimiter === 'custom' && (
+            <input
+              type="text"
+              id="custom-term"
+              value={customTermDelimiter}
+              onChange={(e) => setCustomTermDelimiter(e.target.value)}
+              placeholder="Ví dụ: => hoặc ::"
+              style={{ marginTop: '8px' }}
+            />
+          )}
         </div>
 
         <div className="delimiter-group">
@@ -236,7 +219,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 checked={cardSeparator === 'newline'}
                 onChange={(e) => setCardSeparator(e.target.value as CardSeparatorType)}
               />
-              <label htmlFor="newline">Dòng mới</label>
+              <label htmlFor="newline">Xuống dòng (\n)</label>
             </div>
             <div className="radio-item">
               <input
@@ -247,7 +230,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 checked={cardSeparator === 'semicolon'}
                 onChange={(e) => setCardSeparator(e.target.value as CardSeparatorType)}
               />
-              <label htmlFor="semicolon">Chấm phẩy</label>
+              <label htmlFor="semicolon">Dấu chấm phẩy (;)</label>
             </div>
             <div className="radio-item">
               <input
@@ -259,17 +242,18 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
                 onChange={(e) => setCardSeparator(e.target.value as CardSeparatorType)}
               />
               <label htmlFor="custom-card">Tùy chỉnh</label>
-              {cardSeparator === 'custom' && (
-                <input
-                  type="text"
-                  value={customCardSeparator}
-                  onChange={(e) => setCustomCardSeparator(e.target.value)}
-                  placeholder="Nhập ký tự phân cách"
-                  style={{ width: '150px', marginLeft: '8px' }}
-                />
-              )}
             </div>
           </div>
+          {cardSeparator === 'custom' && (
+            <input
+              type="text"
+              id="custom-card"
+              value={customCardSeparator}
+              onChange={(e) => setCustomCardSeparator(e.target.value)}
+              placeholder="Ví dụ: || hoặc ###"
+              style={{ marginTop: '8px' }}
+            />
+          )}
         </div>
       </div>
 
@@ -295,8 +279,8 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         <button onClick={onClose} className="btn btn-secondary">
           Hủy
         </button>
-        <button 
-          onClick={handleImport} 
+        <button
+          onClick={handleImport}
           className="btn btn-primary"
           disabled={previewCards.length === 0}
         >

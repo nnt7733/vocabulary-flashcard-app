@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useReducer, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState } from 'react';
 import { AppState, Flashcard, StudySession } from '../types';
 import {
   loadAppData,
@@ -135,6 +135,8 @@ interface AppContextValue {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
   voices: SpeechSynthesisVoice[];
+  storageError: string | null;
+  clearStorageError: () => void;
 }
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
@@ -143,6 +145,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [state, dispatch] = useReducer(appReducer, initialState);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [supportsIndexedDB] = useState(() => typeof window !== 'undefined' && 'indexedDB' in window);
+  const [storageErrors, setStorageErrors] = useState<{ flashcards: string | null; studySessions: string | null }>({
+    flashcards: null,
+    studySessions: null
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -243,11 +249,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (supportsIndexedDB) {
-      void saveFlashcards(state.flashcards).catch(error => {
-        console.warn('[FlashcardApp] Không thể lưu flashcards vào IndexedDB:', error);
-      });
+      void saveFlashcards(state.flashcards)
+        .then(() => {
+          setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
+        })
+        .catch(error => {
+          console.warn('[FlashcardApp] Không thể lưu flashcards vào IndexedDB:', error);
+          const message = error instanceof Error ? error.message : String(error);
+          setStorageErrors(prev => ({
+            ...prev,
+            flashcards: `Không thể lưu thẻ vào bộ nhớ: ${message}`
+          }));
+        });
     } else {
       window.localStorage.setItem('flashcards', JSON.stringify(state.flashcards));
+      setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
     }
   }, [state.flashcards, supportsIndexedDB]);
 
@@ -257,11 +273,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (supportsIndexedDB) {
-      void saveStudySessions(state.studySessions).catch(error => {
-        console.warn('[FlashcardApp] Không thể lưu lịch sử học vào IndexedDB:', error);
-      });
+      void saveStudySessions(state.studySessions)
+        .then(() => {
+          setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
+        })
+        .catch(error => {
+          console.warn('[FlashcardApp] Không thể lưu lịch sử học vào IndexedDB:', error);
+          const message = error instanceof Error ? error.message : String(error);
+          setStorageErrors(prev => ({
+            ...prev,
+            studySessions: `Không thể lưu lịch sử học: ${message}`
+          }));
+        });
     } else {
       window.localStorage.setItem('studySessions', JSON.stringify(state.studySessions));
+      setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
     }
   }, [state.studySessions, supportsIndexedDB]);
 
@@ -297,9 +323,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  const storageError = useMemo(() => {
+    const messages = [];
+    if (storageErrors.flashcards) {
+      messages.push(storageErrors.flashcards);
+    }
+    if (storageErrors.studySessions) {
+      messages.push(storageErrors.studySessions);
+    }
+    return messages.length ? messages.join(' ') : null;
+  }, [storageErrors]);
+
+  const clearStorageError = useCallback(() => {
+    setStorageErrors({ flashcards: null, studySessions: null });
+  }, []);
+
   const value = useMemo<AppContextValue>(
-    () => ({ state, dispatch, voices }),
-    [state, voices]
+    () => ({ state, dispatch, voices, storageError, clearStorageError }),
+    [state, voices, storageError, clearStorageError]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

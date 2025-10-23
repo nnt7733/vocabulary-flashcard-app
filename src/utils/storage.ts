@@ -46,19 +46,45 @@ function clearAndBulkPut<T extends { id: string }>(db: IDBDatabase, storeName: s
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, 'readwrite');
     const store = transaction.objectStore(storeName);
+    let hasRejected = false;
+
+    const rejectOnce = (error: DOMException | null | undefined, fallback: string) => {
+      if (hasRejected) {
+        return;
+      }
+      hasRejected = true;
+      try {
+        transaction.abort();
+      } catch {
+        // Ignore abort errors; transaction may already be closing.
+      }
+      reject(error ?? new Error(fallback));
+    };
+
+    transaction.oncomplete = () => {
+      if (!hasRejected) {
+        resolve();
+      }
+    };
+
+    transaction.onerror = () => {
+      rejectOnce(transaction.error, 'Failed to write to IndexedDB.');
+    };
 
     const clearRequest = store.clear();
 
-    clearRequest.onerror = () => reject(clearRequest.error ?? new Error('Failed to clear IndexedDB store.'));
+    clearRequest.onerror = () => {
+      rejectOnce(clearRequest.error, 'Failed to clear IndexedDB store.');
+    };
 
     clearRequest.onsuccess = () => {
       values.forEach(value => {
-        store.put(value);
+        const putRequest = store.put(value);
+        putRequest.onerror = () => {
+          rejectOnce(putRequest.error, 'Failed to write record to IndexedDB.');
+        };
       });
     };
-
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error('Failed to write to IndexedDB.'));
   });
 }
 
