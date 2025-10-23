@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Flashcard } from '../types';
 import EditForm from './EditForm';
 
@@ -70,6 +70,34 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
     return texts[level] || 'Không xác định';
   };
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const ITEM_HEIGHT = 170;
+  const LIST_HEIGHT = 500;
+  const OVERSCAN = 4;
+
+  const { startIndex, endIndex, totalHeight } = useMemo(() => {
+    const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - OVERSCAN);
+    const end = Math.min(
+      flashcards.length,
+      Math.ceil((scrollTop + LIST_HEIGHT) / ITEM_HEIGHT) + OVERSCAN
+    );
+    return {
+      startIndex: start,
+      endIndex: end,
+      totalHeight: flashcards.length * ITEM_HEIGHT
+    };
+  }, [flashcards.length, scrollTop]);
+
+  const visibleCards = useMemo(
+    () => flashcards.slice(startIndex, endIndex),
+    [flashcards, startIndex, endIndex]
+  );
+
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(event.currentTarget.scrollTop);
+  };
+
   if (editingCard) {
     return (
       <EditForm
@@ -92,13 +120,13 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
             Hành động này không thể hoàn tác!
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-            <button 
+            <button
               onClick={() => setShowDeleteConfirm(false)}
               className="btn btn-secondary"
             >
               Hủy
             </button>
-            <button 
+            <button
               onClick={confirmDeleteAll}
               className="btn btn-danger"
             >
@@ -131,78 +159,98 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
           <p>Hãy thêm một số từ vựng mới để bắt đầu học tập!</p>
         </div>
       ) : (
-        <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-          {flashcards.map((card, index) => (
-            <div 
-              key={card.id} 
-              style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                padding: '16px',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                marginBottom: '12px',
-                background: 'white'
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '12px',
-                  marginBottom: '8px'
-                }}>
-                  <span style={{ 
-                    background: getLevelColor(card.currentLevel),
-                    color: 'white',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600'
-                  }}>
-                    Cấp {card.currentLevel}
-                  </span>
-                  <span style={{ 
-                    color: '#6b7280',
-                    fontSize: '14px'
-                  }}>
-                    Ôn lại sau: {getLevelText(card.currentLevel)}
-                  </span>
-                </div>
-                <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
-                  {card.term}
-                </div>
-                <div style={{ color: '#6b7280', fontSize: '14px' }}>
-                  {card.definition}
-                </div>
-                <div style={{ 
-                  color: '#9ca3af', 
-                  fontSize: '12px', 
-                  marginTop: '8px' 
-                }}>
-                  Tạo: {new Date(card.createdAt).toLocaleDateString('vi-VN')} • 
-                  Lần ôn: {card.repetitions.length}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  onClick={() => handleEdit(card)}
-                  className="btn btn-secondary"
-                  style={{ padding: '8px 12px', fontSize: '14px' }}
+        <div
+          ref={containerRef}
+          style={{ maxHeight: `${LIST_HEIGHT}px`, overflowY: 'auto', position: 'relative' }}
+          onScroll={handleScroll}
+        >
+          <div style={{ height: totalHeight, position: 'relative' }}>
+            {visibleCards.map((card, idx) => {
+              const index = startIndex + idx;
+              const top = index * ITEM_HEIGHT;
+              return (
+                <div
+                  key={card.id}
+                  style={{
+                    position: 'absolute',
+                    top,
+                    left: 0,
+                    right: 0,
+                    padding: '8px 0'
+                  }}
                 >
-                  ✏️ Sửa
-                </button>
-                <button 
-                  onClick={() => handleDelete(card.id)}
-                  className="btn btn-danger"
-                  style={{ padding: '8px 12px', fontSize: '14px' }}
-                >
-                  🗑️ Xóa
-                </button>
-              </div>
-            </div>
-          ))}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '16px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      background: 'white',
+                      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginBottom: '8px'
+                      }}>
+                        <span style={{
+                          background: getLevelColor(card.currentLevel),
+                          color: 'white',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: '600'
+                        }}>
+                          Cấp {card.currentLevel}
+                        </span>
+                        <span style={{
+                          color: '#6b7280',
+                          fontSize: '14px'
+                        }}>
+                          Ôn lại sau: {getLevelText(card.currentLevel)}
+                        </span>
+                      </div>
+                      <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '4px' }}>
+                        {card.term}
+                      </div>
+                      <div style={{ color: '#6b7280', fontSize: '14px' }}>
+                        {card.definition}
+                      </div>
+                      <div style={{
+                        color: '#9ca3af',
+                        fontSize: '12px',
+                        marginTop: '8px'
+                      }}>
+                        Tạo: {new Date(card.createdAt).toLocaleDateString('vi-VN')} •
+                        Lần ôn: {card.repetitions.length}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => handleEdit(card)}
+                        className="btn btn-secondary"
+                        style={{ padding: '8px 12px', fontSize: '14px' }}
+                      >
+                        ✏️ Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDelete(card.id)}
+                        className="btn btn-danger"
+                        style={{ padding: '8px 12px', fontSize: '14px' }}
+                      >
+                        🗑️ Xóa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

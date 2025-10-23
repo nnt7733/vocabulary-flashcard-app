@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { DelimiterType, CardSeparatorType } from '../types';
+import { fetchAndParseQuizletUrl, QuizletImportError } from '../utils/quizletImporter';
 
 interface ImportFormProps {
   onImport: (cards: { term: string; definition: string }[]) => void;
@@ -18,7 +19,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   const [isFetchingQuizlet, setIsFetchingQuizlet] = useState(false);
   const [quizletError, setQuizletError] = useState<string | null>(null);
 
-  const parseCards = React.useCallback(() => {
+  const parseCards = useCallback(() => {
     if (!inputText.trim()) {
       setPreviewCards([]);
       return;
@@ -46,197 +47,58 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     setPreviewCards(cards);
   }, [inputText, termDelimiter, cardSeparator, customTermDelimiter, customCardSeparator]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     parseCards();
   }, [parseCards]);
 
-  // Parse readable text fetched from Quizlet page via proxy
-  function parseQuizletReadableText(text: string): { term: string; definition: string }[] {
-    const lines = text
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l.length > 0);
-
-    const cards: { term: string; definition: string }[] = [];
-
-    // Strategy A: Look for Quizlet-specific patterns
-    // Pattern 1: "term" - "definition" or "term" — "definition"
-    for (const line of lines) {
-      const separators = [' — ', ' – ', ' - ', ' : ', ' → ', ' →', '→ '];
-      for (const sep of separators) {
-        if (line.includes(sep)) {
-          const [term, ...rest] = line.split(sep);
-          const definition = rest.join(sep).trim();
-          if (term && definition && term.length <= 200 && definition.length <= 500) {
-            cards.push({ term: term.trim(), definition });
-            break; // Only use first separator found
-          }
-        }
-      }
-    }
-
-    // Strategy B: Look for numbered lists or bullet points
-    if (cards.length === 0) {
-      for (const line of lines) {
-        const numberedMatch = line.match(/^\d+\.\s*(.+?)\s*[-–—:]\s*(.+)$/);
-        if (numberedMatch) {
-          const [, term, definition] = numberedMatch;
-          if (term && definition) {
-            cards.push({ term: term.trim(), definition: definition.trim() });
-          }
-        }
-      }
-    }
-
-    // Strategy C: Look for HTML-like patterns (if any HTML leaked through)
-    if (cards.length === 0) {
-      for (const line of lines) {
-        const htmlMatch = line.match(/<[^>]*>([^<]+)<[^>]*>\s*[-–—:]\s*<[^>]*>([^<]+)<[^>]*>/);
-        if (htmlMatch) {
-          const [, term, definition] = htmlMatch;
-          if (term && definition) {
-            cards.push({ term: term.trim(), definition: definition.trim() });
-          }
-        }
-      }
-    }
-
-    // Strategy D: alternating lines (fallback)
-    if (cards.length === 0) {
-      for (let i = 0; i + 1 < lines.length; i += 2) {
-        const term = lines[i];
-        const definition = lines[i + 1];
-        const headingLike = /^(Terms in this set|Definition|Định nghĩa|Thuật ngữ|Từ vựng|Flashcards|Cards)/i;
-        const tooShort = term.length < 2 || definition.length < 2;
-        const tooLong = term.length > 200 || definition.length > 500;
-        
-        if (!headingLike.test(term) && !tooShort && !tooLong && term && definition) {
-          cards.push({ term, definition });
-        }
-      }
-    }
-
-    // Strategy E: Look for any line with common separators
-    if (cards.length === 0) {
-      for (const line of lines) {
-        const separators = ['\t', ' | ', ' |', '| ', ' : ', ' :', ': '];
-        for (const sep of separators) {
-          if (line.includes(sep)) {
-            const [term, ...rest] = line.split(sep);
-            const definition = rest.join(sep).trim();
-            if (term && definition && term.length <= 200 && definition.length <= 500) {
-              cards.push({ term: term.trim(), definition });
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // Clean up and deduplicate
-    const cleaned = cards.map(card => ({
-      term: card.term.replace(/^["']|["']$/g, '').trim(), // Remove quotes
-      definition: card.definition.replace(/^["']|["']$/g, '').trim()
-    })).filter(card => 
-      card.term.length > 0 && 
-      card.definition.length > 0 &&
-      !/^(term|definition|word|meaning)$/i.test(card.term) // Filter out obvious headers
-    );
-
-    const unique: { term: string; definition: string }[] = [];
-    for (const c of cleaned) {
-      if (!unique.find(u => u.term === c.term && u.definition === c.definition)) {
-        unique.push(c);
-      }
-    }
-    
-    return unique;
-  }
-
-  async function handleQuizletImport() {
+  const handleQuizletImport = useCallback(async () => {
     setQuizletError(null);
-    const url = quizletUrl.trim();
-    if (!url || !/quizlet\.com\//i.test(url)) {
-      setQuizletError('Vui lòng nhập URL Quizlet hợp lệ (https://quizlet.com/...)');
-      return;
-    }
     try {
       setIsFetchingQuizlet(true);
-      
-      // Normalize URL - remove /vn/ and other language prefixes
-      let normalizedUrl = url.replace(/^https?:\/\//i, '');
-      normalizedUrl = normalizedUrl.replace(/\/vn\//, '/');
-      normalizedUrl = normalizedUrl.replace(/\/[a-z]{2}\//, '/'); // Remove other language codes
-      
-      // Try multiple proxy services for CORS bypass
-      const proxies = [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent('https://' + normalizedUrl)}`,
-        `https://cors-anywhere.herokuapp.com/https://${normalizedUrl}`,
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://' + normalizedUrl)}`,
-        `https://thingproxy.freeboard.io/fetch/https://${normalizedUrl}`,
-        `https://corsproxy.io/?${encodeURIComponent('https://' + normalizedUrl)}`
-      ];
-      
-      let text = '';
-      let lastError = null;
-      
-      // Try each proxy until one works
-      for (let i = 0; i < proxies.length; i++) {
-        try {
-          const proxyUrl = proxies[i];
-          console.log(`Trying proxy ${i + 1}/${proxies.length}:`, proxyUrl);
-          
-          const res = await fetch(proxyUrl);
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
-          
-          text = await res.text();
-          console.log('Fetched text length:', text.length);
-          console.log('First 500 chars:', text.substring(0, 500));
-          
-          // If we got some content, break out of the loop
-          if (text.length > 100) {
-            break;
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.log(`Proxy ${i + 1} failed:`, errorMessage);
-          lastError = error;
-          if (i === proxies.length - 1) {
-            throw lastError; // All proxies failed
-          }
-        }
-      }
-      
-      const parsed = parseQuizletReadableText(text);
-      console.log('Parsed cards:', parsed.length);
-      
-      if (parsed.length === 0) {
-        setQuizletError(`
-          ❌ Không thể lấy dữ liệu trực tiếp từ URL Quizlet.
-          
-          🔧 Cách import từ Quizlet (100% hoạt động):
-          1. Mở URL Quizlet trong tab mới: ${url}
-          2. Nhấn nút "Export" (thường ở góc phải)
-          3. Chọn "Copy text" 
-          4. Dán vào khung "Nhập thủ công" bên dưới
-          5. Chọn delimiter phù hợp (Tab hoặc Comma)
-          
-          💡 Lý do: Quizlet có bảo mật chống bot rất mạnh, các proxy service đều bị block.
-        `);
+      const { cards, proxyErrors } = await fetchAndParseQuizletUrl(quizletUrl);
+
+      if (cards.length === 0) {
         setPreviewCards([]);
+        const proxyAttempts = proxyErrors.length;
+        const guidance = [
+          '❌ Không thể lấy dữ liệu trực tiếp từ URL Quizlet.',
+          '',
+          '🔧 Cách import từ Quizlet (100% hoạt động):',
+          `1. Mở URL Quizlet trong tab mới: ${quizletUrl}`,
+          '2. Nhấn nút "Export" (thường ở góc phải)',
+          '3. Chọn "Copy text"',
+          '4. Dán vào khung "Nhập thủ công" bên dưới',
+          '5. Chọn delimiter phù hợp (Tab hoặc Comma)',
+          '',
+          `ℹ️ Đã thử ${proxyAttempts} proxy công khai${
+            proxyAttempts
+              ? `, lỗi cuối cùng: ${proxyErrors[proxyErrors.length - 1]?.message || 'Không xác định'}`
+              : ''
+          }.`
+        ].join('\n');
+        setQuizletError(guidance);
       } else {
-        setPreviewCards(parsed);
+        setPreviewCards(cards);
       }
-    } catch (e) {
-      console.error('Quizlet import error:', e);
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${errorMessage}. Vui lòng kiểm tra mạng và thử lại.`);
+    } catch (error) {
+      if (error instanceof QuizletImportError) {
+        const proxyAttempts = error.proxyErrors.length;
+        const lastError = error.proxyErrors[error.proxyErrors.length - 1]?.message || 'Không xác định';
+        const detailedMessage = [
+          `Không thể tải dữ liệu từ Quizlet: ${error.message}.`,
+          `Đã thử ${proxyAttempts} proxy công khai, lỗi cuối: ${lastError}.`,
+          'Vui lòng kiểm tra URL, kết nối mạng hoặc nhập dữ liệu thủ công.'
+        ].join('\n');
+        setQuizletError(detailedMessage);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        setQuizletError(`Không thể tải dữ liệu từ Quizlet: ${message}. Vui lòng kiểm tra mạng và thử lại.`);
+      }
+      setPreviewCards([]);
     } finally {
       setIsFetchingQuizlet(false);
     }
-  }
+  }, [quizletUrl]);
 
   const handleImport = () => {
     if (previewCards.length > 0) {

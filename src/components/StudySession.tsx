@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Flashcard } from '../types';
 import { updateCardAfterReview } from '../utils/spacedRepetition';
+import { useAppContext } from '../context/AppContext';
 
 interface StudySessionProps {
   cards: Flashcard[];
@@ -24,118 +25,104 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
   const currentCard = cards[currentIndex];
   const progress = ((currentIndex + 1) / cards.length) * 100;
+  const { voices } = useAppContext();
 
   useEffect(() => {
     setStartTime(Date.now());
-    
-    // Load voices on component mount
-    if ('speechSynthesis' in window) {
-      // Some browsers need this to load voices
-      window.speechSynthesis.getVoices();
-      
-      // Listen for voices loaded event
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = () => {
-          const voices = window.speechSynthesis.getVoices();
-          console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`));
-        };
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
-    }
+    };
   }, []);
 
-  const speakText = (text: string) => {
+  const preferredVoice = useMemo<SpeechSynthesisVoice | null>(() => {
+    const availableVoices = voices.length
+      ? voices
+      : (typeof window !== 'undefined' && 'speechSynthesis' in window)
+        ? window.speechSynthesis.getVoices()
+        : [];
+
+    const voicePriority = [
+      'Google US English',
+      'Microsoft Aria Online (Natural) - English (United States)',
+      'Microsoft Mark - English (United States)',
+      'Microsoft Zira - English (United States)',
+      'Google UK English Female',
+      'Google UK English Male',
+      'Microsoft Libby Online (Natural) - English (United Kingdom)',
+      'Microsoft Ryan Online (Natural) - English (United Kingdom)',
+      'Microsoft Susan - English (United Kingdom)',
+      'Microsoft Hazel - English (United Kingdom)',
+      'Microsoft George - English (United Kingdom)'
+    ];
+
+    let selectedVoice = voicePriority
+      .map(name => availableVoices.find(voice => voice.name === name))
+      .find(Boolean) || null;
+
+    if (!selectedVoice) {
+      selectedVoice =
+        availableVoices.find(voice =>
+          voice.lang === 'en-US' &&
+          (voice.name.includes('Google') || voice.name.includes('Natural') || voice.name.includes('Premium'))
+        ) || null;
+    }
+
+    if (!selectedVoice) {
+      selectedVoice = availableVoices.find(voice => voice.lang === 'en-US') || null;
+    }
+
+    if (!selectedVoice) {
+      selectedVoice =
+        availableVoices.find(voice => voice.lang === 'en-GB' && (voice.name.includes('Google') || voice.name.includes('Natural')))
+        || null;
+    }
+
+    if (!selectedVoice) {
+      selectedVoice = availableVoices.find(voice => voice.lang.startsWith('en-')) || null;
+    }
+
+    return selectedVoice || null;
+  }, [voices]);
+
+  const speakText = useCallback((text: string) => {
     if ('speechSynthesis' in window) {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
-      
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
       utterance.rate = 0.92; // Tốc độ gốc tự nhiên
       utterance.pitch = 1.0; // Cao độ tự nhiên
       utterance.volume = 1.0; // Âm lượng tối đa
-      
-      // Prioritize the best quality US English voices
-      const voices = window.speechSynthesis.getVoices();
-      
-      // Priority order: US English (per user preference), then UK
-      const voicePriority = [
-        // US English voices
-        'Google US English',
-        'Microsoft Aria Online (Natural) - English (United States)',
-        'Microsoft Mark - English (United States)',
-        'Microsoft Zira - English (United States)',
-        // UK English fallback (Cambridge-like)
-        'Google UK English Female',
-        'Google UK English Male',
-        'Microsoft Libby Online (Natural) - English (United Kingdom)',
-        'Microsoft Ryan Online (Natural) - English (United Kingdom)',
-        'Microsoft Susan - English (United Kingdom)',
-        'Microsoft Hazel - English (United Kingdom)',
-        'Microsoft George - English (United Kingdom)'
-      ];
-      
-      let selectedVoice = null;
-      
-      // Try to find voice by exact name
-      for (const voiceName of voicePriority) {
-        selectedVoice = voices.find(v => v.name === voiceName);
-        if (selectedVoice) break;
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
       }
-      
-      // Fallback: Find any high-quality en-US voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => 
-          v.lang === 'en-US' && 
-          (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Premium'))
-        );
-      }
-      
-      // Fallback 2: Any en-US voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang === 'en-US');
-      }
-      
-      // Fallback 3: Any high-quality en-GB voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => 
-          v.lang === 'en-GB' && 
-          (v.name.includes('Google') || v.name.includes('Natural'))
-        );
-      }
-      
-      // Last resort: Any English voice
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.startsWith('en-'));
-      }
-      
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-        console.log('Using voice:', selectedVoice.name); // Debug log
-      }
-      
+
       window.speechSynthesis.speak(utterance);
     }
-  };
+  }, [preferredVoice]);
 
-  const handleFlip = () => {
-    setIsFlipped(!isFlipped);
-  };
+  const handleFlip = useCallback(() => {
+    setIsFlipped(prev => !prev);
+  }, []);
 
-  const handleAnswer = (correct: boolean) => {
+  const handleAnswer = useCallback((correct: boolean) => {
     const responseTime = Date.now() - startTime;
     const updatedCard = updateCardAfterReview(currentCard, correct, responseTime);
     // Save history snapshot for undo
     setActionHistory(prev => [...prev, { cardId: currentCard.id, prevCard: currentCard, wasCorrect: correct }]);
-    
+
     // Update the cards map
-    const newUpdatedCardsMap = new Map(updatedCardsMap);
-    newUpdatedCardsMap.set(updatedCard.id, updatedCard);
-    setUpdatedCardsMap(newUpdatedCardsMap);
+    const nextUpdatedMap = new Map(updatedCardsMap);
+    nextUpdatedMap.set(updatedCard.id, updatedCard);
+    setUpdatedCardsMap(nextUpdatedMap);
 
     // Add to incorrect cards list if answer is wrong
-    if (!correct) {
-      setIncorrectCards(prev => [...prev, updatedCard]);
-    }
+    const nextIncorrectCards = correct ? incorrectCards : [...incorrectCards, updatedCard];
+    setIncorrectCards(nextIncorrectCards);
 
     setSessionStats(prev => ({
       ...prev,
@@ -150,17 +137,46 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       setStartTime(Date.now());
     } else {
       // Session finished - include the last answered card state and incorrect list
-      const finalCards = cards.map(card => 
-        newUpdatedCardsMap.get(card.id) || card
+      const finalCards = cards.map(card =>
+        nextUpdatedMap.get(card.id) || card
       );
 
-      const finalIncorrect = correct
-        ? incorrectCards
-        : [...incorrectCards, newUpdatedCardsMap.get(currentCard.id) as Flashcard];
+      const finalIncorrect = nextIncorrectCards;
 
       onComplete(finalCards, finalIncorrect);
     }
-  };
+  }, [cards, currentCard, currentIndex, incorrectCards, onComplete, startTime, updatedCardsMap]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) {
+        return;
+      }
+
+      if (!isFlipped && (event.code === 'Space' || event.code === 'Enter')) {
+        event.preventDefault();
+        handleFlip();
+        return;
+      }
+
+      if (isFlipped && event.code === 'ArrowLeft') {
+        event.preventDefault();
+        handleAnswer(false);
+        return;
+      }
+
+      if (isFlipped && event.code === 'ArrowRight') {
+        event.preventDefault();
+        handleAnswer(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleAnswer, handleFlip, isFlipped]);
 
   const handleUndo = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
