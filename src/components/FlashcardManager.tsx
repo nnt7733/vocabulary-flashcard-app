@@ -8,7 +8,7 @@ import FlashcardList from './FlashcardList';
 import { useAppContext } from '../context/AppContext';
 
 const FlashcardManager: React.FC = () => {
-  const { state, dispatch } = useAppContext();
+  const { state, dispatch, storageError, clearStorageError } = useAppContext();
   const [showSummary, setShowSummary] = useState(false);
   const [showFlashcardList, setShowFlashcardList] = useState(false);
   const [sessionResults, setSessionResults] = useState<{
@@ -112,6 +112,18 @@ const FlashcardManager: React.FC = () => {
   const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
   const cardsForReview = useMemo(() => getCardsForReview(activeFlashcards), [activeFlashcards]);
 
+  const storageBanner = storageError ? (
+    <div className="storage-alert" role="alert">
+      <div>
+        <strong>⚠️ Không thể lưu dữ liệu.</strong>
+        <div>{storageError}</div>
+      </div>
+      <button type="button" className="storage-alert__close" onClick={clearStorageError}>
+        Đóng
+      </button>
+    </div>
+  ) : null;
+
   if (showSummary && sessionResults) {
     return (
       <div className="container">
@@ -119,6 +131,7 @@ const FlashcardManager: React.FC = () => {
           <h1>📚 Học Từ Vựng</h1>
           <p>Hệ thống học từ vựng với spaced repetition</p>
         </div>
+        {storageBanner}
         <SessionSummary
           correctCount={sessionResults.correctCount}
           incorrectCount={sessionResults.incorrectCount}
@@ -137,6 +150,7 @@ const FlashcardManager: React.FC = () => {
           <h1>📚 Học Từ Vựng</h1>
           <p>Hệ thống học từ vựng với spaced repetition</p>
         </div>
+        {storageBanner}
         <FlashcardList
           flashcards={state.flashcards}
           onUpdateCard={handleUpdateCard}
@@ -156,16 +170,19 @@ const FlashcardManager: React.FC = () => {
   }
 
   if (state.isStudying) {
-    const cardsToStudy = sessionResults && sessionResults.incorrectCards.length > 0 
-      ? sessionResults.incorrectCards 
+    const cardsToStudy = sessionResults && sessionResults.incorrectCards.length > 0
+      ? sessionResults.incorrectCards
       : cardsForReview;
-      
+
     return (
-      <StudySession
-        cards={cardsToStudy}
-        onComplete={handleStudyComplete}
-        onExit={handleExitStudy}
-      />
+      <>
+        {storageBanner}
+        <StudySession
+          cards={cardsToStudy}
+          onComplete={handleStudyComplete}
+          onExit={handleExitStudy}
+        />
+      </>
     );
   }
 
@@ -175,6 +192,8 @@ const FlashcardManager: React.FC = () => {
         <h1>📚 Học Từ Vựng</h1>
         <p>Hệ thống học từ vựng với spaced repetition</p>
       </div>
+
+      {storageBanner}
 
       {state.showImportForm ? (
         <ImportForm

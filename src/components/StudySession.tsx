@@ -21,7 +21,13 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     total: cards.length
   });
   // Keep action history to support Undo
-  const [actionHistory, setActionHistory] = useState<Array<{ cardId: string; prevCard: Flashcard; wasCorrect: boolean }>>([]);
+  const [actionHistory, setActionHistory] = useState<Array<{
+    cardId: string;
+    prevCard: Flashcard;
+    wasCorrect: boolean;
+    incorrectIndex: number | null;
+    hadExistingUpdate: boolean;
+  }>>([]);
 
   const currentCard = cards[currentIndex];
   const progress = ((currentIndex + 1) / cards.length) * 100;
@@ -111,9 +117,22 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
   const handleAnswer = useCallback((correct: boolean) => {
     const responseTime = Date.now() - startTime;
-    const updatedCard = updateCardAfterReview(currentCard, correct, responseTime);
+    const previousCardState = updatedCardsMap.get(currentCard.id) || currentCard;
+    const hadExistingUpdate = updatedCardsMap.has(currentCard.id);
+    const updatedCard = updateCardAfterReview(previousCardState, correct, responseTime);
+
     // Save history snapshot for undo
-    setActionHistory(prev => [...prev, { cardId: currentCard.id, prevCard: currentCard, wasCorrect: correct }]);
+    const nextIncorrectIndex = correct ? null : incorrectCards.length;
+    setActionHistory(prev => [
+      ...prev,
+      {
+        cardId: currentCard.id,
+        prevCard: previousCardState,
+        wasCorrect: correct,
+        incorrectIndex: nextIncorrectIndex,
+        hadExistingUpdate
+      }
+    ]);
 
     // Update the cards map
     const nextUpdatedMap = new Map(updatedCardsMap);
@@ -186,17 +205,19 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
     // Restore card state in map
     const newMap = new Map(updatedCardsMap);
-    newMap.set(restoredCard.id, restoredCard);
+    if (lastAction.hadExistingUpdate) {
+      newMap.set(restoredCard.id, restoredCard);
+    } else {
+      newMap.delete(restoredCard.id);
+    }
     setUpdatedCardsMap(newMap);
 
     // Adjust incorrect cards list
-    if (!lastAction.wasCorrect) {
-      // Remove the last occurrence of this card id in incorrectCards
-      const idx = [...incorrectCards].reverse().findIndex(c => c.id === restoredCard.id);
-      if (idx !== -1) {
-        const realIndex = incorrectCards.length - 1 - idx;
+    if (lastAction.incorrectIndex !== null) {
+      const incorrectIdx = lastAction.incorrectIndex;
+      if (incorrectIdx >= 0 && incorrectIdx < incorrectCards.length) {
         const newIncorrect = incorrectCards.slice();
-        newIncorrect.splice(realIndex, 1);
+        newIncorrect.splice(incorrectIdx, 1);
         setIncorrectCards(newIncorrect);
       }
     }
