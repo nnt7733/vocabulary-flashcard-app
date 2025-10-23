@@ -202,6 +202,12 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     }
   }, [cards, currentCard, currentIndex, incorrectCards, onComplete, sessionStats, startTime, updatedCardsMap]);
 
+  const handleSpeak = useCallback(() => {
+    if (currentCard) {
+      speakText(currentCard.term);
+    }
+  }, [currentCard, speakText]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -215,13 +221,21 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         return;
       }
 
-      if (isFlipped && event.code === 'ArrowLeft') {
+      if (event.key === 'Control') {
+        event.preventDefault();
+        if (!event.repeat) {
+          handleSpeak();
+        }
+        return;
+      }
+
+      if (event.code === 'ArrowLeft') {
         event.preventDefault();
         handleAnswer(false);
         return;
       }
 
-      if (isFlipped && event.code === 'ArrowRight') {
+      if (event.code === 'ArrowRight') {
         event.preventDefault();
         handleAnswer(true);
       }
@@ -231,7 +245,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleAnswer, handleFlip, isFlipped]);
+  }, [handleAnswer, handleFlip, handleSpeak, isFlipped]);
 
   const handleUndo = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -272,10 +286,6 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
     // Pop history
     setActionHistory(prev => prev.slice(0, -1));
-  };
-
-  const handleSpeak = () => {
-    speakText(currentCard.term);
   };
 
   if (!currentCard) {

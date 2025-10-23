@@ -1,5 +1,13 @@
 import { Flashcard, SPACED_REPETITION_SCHEDULE } from '../types';
 
+function isSameDay(dateA: Date, dateB: Date): boolean {
+  return (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
+}
+
 export function calculateNextReviewDate(level: number, lastReviewDate: Date): Date {
   const schedule = SPACED_REPETITION_SCHEDULE[level];
   if (!schedule) {
@@ -72,15 +80,34 @@ export function updateCardAfterReview(
   };
 }
 
-export function getCardsForReview(cards: Flashcard[]): Flashcard[] {
+interface GetCardsForReviewOptions {
+  excludeNewToday?: boolean;
+}
+
+export function getCardsForReview(
+  cards: Flashcard[],
+  options: GetCardsForReviewOptions = {}
+): Flashcard[] {
   const now = new Date();
   return cards.filter(card => {
     // Include new cards (level 0) or cards that are due for review
     if (card.status === 'learned') {
       return false;
     }
+    if (options.excludeNewToday && card.isNew && isSameDay(card.createdAt, now)) {
+      return false;
+    }
     return card.currentLevel === 0 || card.nextReviewDate <= now;
   });
+}
+
+export function getTodayNewCards(cards: Flashcard[]): Flashcard[] {
+  const today = new Date();
+  return cards.filter(card =>
+    card.status !== 'learned' &&
+    card.isNew &&
+    isSameDay(card.createdAt, today)
+  );
 }
 
 export function getCardsByLevel(cards: Flashcard[]): { [level: number]: Flashcard[] } {
@@ -96,17 +123,20 @@ export function getCardsByLevel(cards: Flashcard[]): { [level: number]: Flashcar
 export function getStudyStats(cards: Flashcard[]): {
   total: number;
   new: number;
+  newToday: number;
   due: number;
   byLevel: { [level: number]: number };
 } {
   const activeCards = cards.filter(card => card.status !== 'learned');
   const newCards = activeCards.filter(card => card.isNew).length;
-  const dueCards = getCardsForReview(activeCards).length;
+  const todayNewCards = getTodayNewCards(activeCards);
+  const dueCards = getCardsForReview(activeCards, { excludeNewToday: true }).length;
   const byLevel = getCardsByLevel(activeCards);
 
   return {
     total: activeCards.length,
     new: newCards,
+    newToday: todayNewCards.length,
     due: dueCards,
     byLevel: Object.fromEntries(
       Object.entries(byLevel).map(([level, cards]) => [level, cards.length])

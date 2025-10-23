@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Flashcard } from '../types';
-import { getCardsForReview, getStudyStats } from '../utils/spacedRepetition';
+import { getCardsForReview, getStudyStats, getTodayNewCards } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
 import StudySession, { StudySessionResult } from './StudySession';
 import SessionSummary from './SessionSummary';
@@ -20,18 +20,48 @@ const FlashcardManager: React.FC = () => {
     startedAt: Date;
     finishedAt: Date;
   } | null>(null);
+  const [currentSessionCards, setCurrentSessionCards] = useState<Flashcard[] | null>(null);
+
+  const activeFlashcards = useMemo(
+    () => state.flashcards.filter(card => card.status !== 'learned'),
+    [state.flashcards]
+  );
+
+  const learnedFlashcards = useMemo(
+    () => state.flashcards.filter(card => card.status === 'learned'),
+    [state.flashcards]
+  );
+
+  const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
+  const cardsForReview = useMemo(
+    () => getCardsForReview(activeFlashcards, { excludeNewToday: true }),
+    [activeFlashcards]
+  );
+  const todaysNewCards = useMemo(
+    () => getTodayNewCards(activeFlashcards),
+    [activeFlashcards]
+  );
 
   const handleImport = (cards: { term: string; definition: string }[]) => {
     if (!cards.length) return;
     dispatch({ type: 'IMPORT_FLASHCARDS', payload: { cards } });
   };
 
-  const handleStartStudy = () => {
-    const cardsToStudy = getCardsForReview(state.flashcards);
+  const handleStartStudy = (mode: 'review' | 'newToday') => {
+    const cardsToStudy = mode === 'review'
+      ? cardsForReview
+      : todaysNewCards;
+
     if (cardsToStudy.length === 0) {
-      alert('Không có thẻ nào cần ôn tập vào lúc này!');
+      if (mode === 'review') {
+        alert('Không có thẻ nào cần ôn tập vào lúc này!');
+      } else {
+        alert('Hôm nay bạn chưa thêm thẻ mới nào để học.');
+      }
       return;
     }
+
+    setCurrentSessionCards(cardsToStudy);
     dispatch({ type: 'START_STUDY' });
   };
 
@@ -54,17 +84,20 @@ const FlashcardManager: React.FC = () => {
       finishedAt
     });
     setShowSummary(true);
+    setCurrentSessionCards(null);
   };
 
   const handleExitStudy = () => {
     dispatch({ type: 'EXIT_STUDY' });
     setShowSummary(false);
     setSessionResults(null);
+    setCurrentSessionCards(null);
   };
 
   const handleReviewIncorrect = () => {
     if (sessionResults && sessionResults.incorrectCards.length > 0) {
       setShowSummary(false);
+      setCurrentSessionCards(sessionResults.incorrectCards);
       dispatch({ type: 'START_STUDY' });
     }
   };
@@ -84,6 +117,7 @@ const FlashcardManager: React.FC = () => {
 
     setShowSummary(false);
     setSessionResults(null);
+    setCurrentSessionCards(null);
   };
 
   const handleUpdateCard = (updatedCard: Flashcard) => {
@@ -97,19 +131,6 @@ const FlashcardManager: React.FC = () => {
   const handleDeleteAllCards = () => {
     dispatch({ type: 'DELETE_ALL_FLASHCARDS' });
   };
-
-  const activeFlashcards = useMemo(
-    () => state.flashcards.filter(card => card.status !== 'learned'),
-    [state.flashcards]
-  );
-
-  const learnedFlashcards = useMemo(
-    () => state.flashcards.filter(card => card.status === 'learned'),
-    [state.flashcards]
-  );
-
-  const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
-  const cardsForReview = useMemo(() => getCardsForReview(activeFlashcards), [activeFlashcards]);
 
   const storageBanner = storageError ? (
     <div className="storage-alert" role="alert">
@@ -172,7 +193,7 @@ const FlashcardManager: React.FC = () => {
   if (state.isStudying) {
     const cardsToStudy = sessionResults && sessionResults.incorrectCards.length > 0
       ? sessionResults.incorrectCards
-      : cardsForReview;
+      : currentSessionCards ?? cardsForReview;
 
     return (
       <>
@@ -212,6 +233,10 @@ const FlashcardManager: React.FC = () => {
               <div className="stat-label">Thẻ mới</div>
             </div>
             <div className="stat-card">
+              <div className="stat-number">{stats.newToday}</div>
+              <div className="stat-label">Mới hôm nay</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-number">{stats.due}</div>
               <div className="stat-label">Cần ôn tập</div>
             </div>
@@ -233,10 +258,14 @@ const FlashcardManager: React.FC = () => {
                 Sẵn sàng học tập?
               </h2>
               <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-                {cardsForReview.length > 0 
+                {cardsForReview.length > 0
                   ? `Bạn có ${cardsForReview.length} thẻ cần ôn tập`
-                  : 'Tuyệt vời! Bạn đã hoàn thành tất cả thẻ cần ôn tập hôm nay.'
-                }
+                  : 'Tuyệt vời! Bạn đã hoàn thành tất cả thẻ cần ôn tập hôm nay.'}
+              </p>
+              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+                {todaysNewCards.length > 0
+                  ? `Hôm nay có ${todaysNewCards.length} thẻ mới chờ bạn khám phá.`
+                  : 'Bạn chưa thêm thẻ mới nào trong ngày hôm nay.'}
               </p>
             </div>
 
@@ -255,7 +284,16 @@ const FlashcardManager: React.FC = () => {
                 📝 Quản lý từ vựng
               </button>
               <button
-                onClick={handleStartStudy}
+                onClick={() => handleStartStudy('newToday')}
+                className="btn btn-secondary"
+                disabled={todaysNewCards.length === 0}
+                title={todaysNewCards.length === 0 ? 'Chưa có thẻ mới nào trong ngày hôm nay' : 'Học các thẻ mới vừa thêm'}
+                style={todaysNewCards.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+              >
+                🌱 Học từ mới hôm nay
+              </button>
+              <button
+                onClick={() => handleStartStudy('review')}
                 className="btn btn-success"
                 disabled={cardsForReview.length === 0}
                 title={cardsForReview.length === 0 ? 'Không có thẻ cần ôn hôm nay' : 'Bắt đầu học'}
