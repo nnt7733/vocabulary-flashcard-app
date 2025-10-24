@@ -15,11 +15,13 @@ import {
 } from '../utils/overdue';
 import PriorityReviewPanel from './PriorityReviewPanel';
 import OverdueTrendChart from './OverdueTrendChart';
+import SettingsForm from './SettingsForm';
 
 const FlashcardManager: React.FC = () => {
   const { state, dispatch, storageError, clearStorageError } = useAppContext();
   const [showSummary, setShowSummary] = useState(false);
   const [showFlashcardList, setShowFlashcardList] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [sessionResults, setSessionResults] = useState<{
     correctCount: number;
     incorrectCount: number;
@@ -168,6 +170,19 @@ const FlashcardManager: React.FC = () => {
       </button>
     </div>
   ) : null;
+
+  if (showSettings) {
+    return (
+      <div className="container">
+        <div className="header">
+          <h1>📚 Học Từ Vựng</h1>
+          <p>Hệ thống học từ vựng với spaced repetition</p>
+        </div>
+        {storageBanner}
+        <SettingsForm onClose={() => setShowSettings(false)} />
+      </div>
+    );
+  }
 
   if (showSummary && sessionResults) {
     return (
@@ -336,6 +351,12 @@ const FlashcardManager: React.FC = () => {
                 style={cardsForReview.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
               >
                 🚀 Bắt đầu học
+              </button>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="btn btn-secondary"
+              >
+                ⚙️ Cài đặt
               </button>
             </div>
           </div>
