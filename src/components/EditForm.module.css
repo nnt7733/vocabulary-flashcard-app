@@ -1,0 +1,42 @@
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-title, #1f2937);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--color-muted, #6b7280);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+.levelError {
+  color: var(--color-danger, #b91c1c);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.levelHint {
+  color: var(--color-subtle, #6b7280);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
