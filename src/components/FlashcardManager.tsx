@@ -55,7 +55,6 @@ const FlashcardManager: React.FC = () => {
     () => getTodayNewCards(activeFlashcards),
     [activeFlashcards]
   );
-  const overdueCount = overdueCards.length;
   const priorityCards = useMemo(() => {
     const combined = [...longOverdueCards, ...overdueCards, ...dueSoonCards];
     const unique = new Map<string, Flashcard>();
@@ -290,7 +289,7 @@ const FlashcardManager: React.FC = () => {
             </div>
           </div>
 
-          <OverdueTrendChart currentCount={overdueCount} />
+          <OverdueTrendChart sessions={state.studySessions} />
 
           <PriorityReviewPanel
             overdueCards={overdueCards}

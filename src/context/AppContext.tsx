@@ -6,7 +6,7 @@ import {
   saveFlashcards,
   saveStudySessions
 } from '../utils/storage';
-import { recordOverdueSnapshot } from '../utils/overdue';
+import { applyOverduePenalty, recordOverdueSnapshot } from '../utils/overdue';
 
 type ImportedCard = { term: string; definition: string };
 
@@ -159,7 +159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let isCancelled = false;
 
-    const hydrateWithData = (flashcards?: any[], studySessions?: any[]) => {
+    const hydrateWithData = (flashcards?: Flashcard[], studySessions?: StudySession[]) => {
       if (isCancelled) {
         return;
       }
@@ -167,8 +167,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({
         type: 'HYDRATE_FROM_STORAGE',
         payload: {
-          flashcards: flashcards ? flashcards.map(reviveFlashcard) : undefined,
-          studySessions: studySessions ? studySessions.map(reviveStudySession) : undefined
+          flashcards,
+          studySessions
         }
       });
     };
@@ -188,14 +188,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const revivedFlashcards = parsedFlashcards
           ? parsedFlashcards.map((card: any) => reviveFlashcard(card))
           : undefined;
+        const penalizedFlashcards = revivedFlashcards
+          ? applyOverduePenalty(revivedFlashcards)
+          : undefined;
         const revivedStudySessions = parsedStudySessions
           ? parsedStudySessions.map((session: any) => reviveStudySession(session))
           : undefined;
 
-        hydrateWithData(revivedFlashcards, revivedStudySessions);
+        hydrateWithData(penalizedFlashcards, revivedStudySessions);
 
         return {
-          flashcards: revivedFlashcards ?? [],
+          flashcards: penalizedFlashcards ?? [],
           studySessions: revivedStudySessions ?? []
         };
       } catch (error) {
@@ -210,7 +213,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const { flashcards, studySessions } = await loadAppData<any, any>();
 
           if ((flashcards?.length ?? 0) > 0 || (studySessions?.length ?? 0) > 0) {
-            hydrateWithData(flashcards, studySessions);
+            const revivedFlashcards = flashcards
+              ? flashcards.map((card: any) => reviveFlashcard(card))
+              : undefined;
+            const penalizedFlashcards = revivedFlashcards
+              ? applyOverduePenalty(revivedFlashcards)
+              : undefined;
+            const revivedStudySessions = studySessions
+              ? studySessions.map((session: any) => reviveStudySession(session))
+              : undefined;
+
+            hydrateWithData(penalizedFlashcards, revivedStudySessions);
             return;
           }
 

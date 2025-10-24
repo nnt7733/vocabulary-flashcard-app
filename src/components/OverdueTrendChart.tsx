@@ -1,20 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { OverdueSnapshot, loadOverdueHistory } from '../utils/overdue';
+import { StudySession } from '../types';
 
 interface OverdueTrendChartProps {
-  currentCount: number;
+  sessions: StudySession[];
 }
 
 const CHART_HEIGHT = 160;
 const CHART_WIDTH = 640;
 
-const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ currentCount }) => {
+const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ sessions }) => {
   const [history, setHistory] = useState<OverdueSnapshot[]>([]);
+  const totalSessions = sessions.length;
 
   useEffect(() => {
     const snapshots = loadOverdueHistory();
     setHistory(snapshots);
-  }, [currentCount]);
+  }, [sessions]);
 
   const chartData = useMemo(() => {
     if (!history.length) {
@@ -56,12 +58,18 @@ const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ currentCount }) =
     });
   }, [chartData]);
 
+  const currentCount = chartData.length ? chartData[chartData.length - 1].count : 0;
+
   if (!chartData.length) {
     return (
       <div className="card" style={{ marginTop: '16px', textAlign: 'left' }}>
         <h2 style={{ marginBottom: '12px', color: '#1f2937' }}>📊 Xu hướng thẻ trễ hạn</h2>
         <p style={{ color: '#6b7280' }}>
           Khi bạn học và cập nhật thẻ mỗi ngày, biểu đồ này sẽ hiển thị xu hướng số lượng thẻ trễ hạn trong 2 tuần gần nhất.
+          {' '}
+          {totalSessions > 0
+            ? 'Hãy tiếp tục duy trì nhịp độ học để thu thập thêm dữ liệu.'
+            : 'Bắt đầu một phiên học để tạo bản ghi đầu tiên!'}
         </p>
       </div>
     );

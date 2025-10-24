@@ -152,3 +152,41 @@ export function recordOverdueSnapshot(cards: Flashcard[], now: Date = new Date()
     console.warn('[FlashcardApp] Không thể lưu lịch sử trễ hạn:', error);
   }
 }
+
+export function applyOverduePenalty(cards: Flashcard[], now: Date = new Date()): Flashcard[] {
+  const nowTime = now.getTime();
+
+  return cards.map(card => {
+    const nextReviewDate = card.nextReviewDate instanceof Date
+      ? card.nextReviewDate
+      : new Date(card.nextReviewDate);
+    const nextReviewTime = nextReviewDate.getTime();
+
+    if (Number.isNaN(nextReviewTime) || nextReviewTime > nowTime) {
+      return card;
+    }
+
+    const overdueDays = Math.floor((nowTime - nextReviewTime) / MS_PER_DAY);
+
+    if (overdueDays < 3) {
+      return card;
+    }
+
+    const penaltyLevels = Math.floor(overdueDays / 3);
+    if (penaltyLevels <= 0) {
+      return card;
+    }
+
+    const downgradedLevel = Math.max(0, card.currentLevel - penaltyLevels);
+
+    if (downgradedLevel === card.currentLevel) {
+      return card;
+    }
+
+    return {
+      ...card,
+      currentLevel: downgradedLevel,
+      status: 'active'
+    };
+  });
+}

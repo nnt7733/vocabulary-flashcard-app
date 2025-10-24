@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Flashcard } from '../types';
 import EditForm from './EditForm';
-import { FixedSizeList as List, ListChildComponentProps } from '../lib/react-window';
+import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { calculateCardUrgency, sortCardsByUrgency } from '../utils/overdue';
 
 interface FlashcardListProps {
