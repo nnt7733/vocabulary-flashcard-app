@@ -1,163 +1,163 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
-interface ReminderSettings {
+type ReminderSettings = {
   enabled: boolean;
   hour: number;
   minute: number;
-}
+};
 
-interface Settings {
+type Settings = {
   openAtLogin: boolean;
   reminder: ReminderSettings;
-}
+};
 
-interface SettingsFormProps {
+type SettingsFormProps = {
   onClose: () => void;
-}
+};
 
 declare global {
   interface Window {
     electronAPI?: {
       getSettings: () => Promise<Settings>;
-      setOpenAtLogin: (enabled: boolean) => Promise<{ success: boolean; error?: string }>;
-      setReminder: (settings: ReminderSettings) => Promise<{ success: boolean; error?: string }>;
+      setOpenAtLogin: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; error?: string } | void>;
+      setReminder: (
+        settings: ReminderSettings
+      ) => Promise<{ success: boolean; error?: string } | void>;
     };
   }
 }
 
-const DEFAULT_SETTINGS: Settings = {
-  openAtLogin: false,
-  reminder: {
-    enabled: false,
-    hour: 8,
-    minute: 0
-  }
+const DEFAULT_REMINDER: ReminderSettings = {
+  enabled: false,
+  hour: 8,
+  minute: 0
+};
+
+const formatTime = (hour: number, minute: number) =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+const parseTime = (value: string): { hour: number; minute: number } => {
+  const [rawHour, rawMinute] = value.split(':');
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+
+  return {
+    hour: Number.isFinite(hour) ? hour : DEFAULT_REMINDER.hour,
+    minute: Number.isFinite(minute) ? minute : DEFAULT_REMINDER.minute
+  };
 };
 
 const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isElectronAvailable, setIsElectronAvailable] = useState(() => Boolean(window.electronAPI));
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [openAtLogin, setOpenAtLoginState] = useState(false);
+  const [reminder, setReminderState] = useState<ReminderSettings>(DEFAULT_REMINDER);
 
   useEffect(() => {
     let isMounted = true;
 
-    if (!window.electronAPI) {
-      if (isMounted) {
-        setError('Tính năng cài đặt chỉ khả dụng khi chạy ứng dụng trên desktop.');
-        setIsLoading(false);
+    const loadSettings = async () => {
+      if (!window.electronAPI) {
+        if (isMounted) {
+          setError('Tính năng cài đặt chỉ khả dụng trong ứng dụng desktop.');
+          setIsLoading(false);
+        }
+        return;
       }
-      return () => {
-        isMounted = false;
-      };
-    }
 
-    window.electronAPI
-      .getSettings()
-      .then(loadedSettings => {
+      try {
+        const settings = await window.electronAPI.getSettings();
         if (isMounted) {
-          setSettings(loadedSettings);
+          setOpenAtLoginState(Boolean(settings.openAtLogin));
+          setReminderState({
+            enabled: Boolean(settings.reminder?.enabled),
+            hour: Number(settings.reminder?.hour ?? DEFAULT_REMINDER.hour),
+            minute: Number(settings.reminder?.minute ?? DEFAULT_REMINDER.minute)
+          });
+          setError(null);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          console.error('Không thể tải cài đặt:', err);
+          setError('Không thể tải cài đặt. Vui lòng thử lại sau.');
+        }
+      } finally {
+        if (isMounted) {
           setIsLoading(false);
         }
-      })
-      .catch(err => {
-        if (isMounted) {
-          console.error('Lỗi khi tải cài đặt:', err);
-          setError('Không thể tải cài đặt.');
-          setIsLoading(false);
-        }
-      });
+      }
+    };
+
+    loadSettings();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  useEffect(() => {
-    setIsElectronAvailable(Boolean(window.electronAPI));
-  }, [isLoading]);
-
-  const handleOpenAtLoginChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const isChecked = event.target.checked;
-      setError(null);
-      setSuccessMessage(null);
-      setSettings(prev => ({ ...prev, openAtLogin: isChecked }));
-
-      if (!window.electronAPI) {
-        setError('Không thể thay đổi cài đặt khởi động khi chạy trong trình duyệt.');
-        setSettings(prev => ({ ...prev, openAtLogin: !isChecked }));
-        return;
-      }
-
-      try {
-        const result = await window.electronAPI.setOpenAtLogin(isChecked);
-        if (!result.success) {
-          setError(`Lỗi lưu cài đặt khởi động: ${result.error || 'Không rõ nguyên nhân'}`);
-          setSettings(prev => ({ ...prev, openAtLogin: !isChecked }));
-        } else {
-          setError(null);
-          setSuccessMessage('Đã lưu cài đặt khởi động.');
-        }
-      } catch (err: any) {
-        setError(`Lỗi lưu cài đặt khởi động: ${err?.message || err}`);
-        setSettings(prev => ({ ...prev, openAtLogin: !isChecked }));
-      }
-    },
-    []
+  const formattedTime = useMemo(
+    () => formatTime(reminder.hour, reminder.minute),
+    [reminder.hour, reminder.minute]
   );
 
-  const handleReminderEnabledChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const isChecked = event.target.checked;
+  const handleOpenAtLoginChange: React.ChangeEventHandler<HTMLInputElement> = async event => {
+    const nextValue = event.target.checked;
+    setOpenAtLoginState(nextValue);
     setError(null);
-    setSuccessMessage(null);
-    setSettings(prev => ({
-      ...prev,
-      reminder: { ...prev.reminder, enabled: isChecked }
-    }));
-  }, []);
+    setStatusMessage(null);
 
-  const handleTimeChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const [hour, minute] = event.target.value.split(':').map(Number);
-    setError(null);
-    setSuccessMessage(null);
-    setSettings(prev => ({
-      ...prev,
-      reminder: {
-        ...prev.reminder,
-        hour: Number.isNaN(hour) ? prev.reminder.hour : hour,
-        minute: Number.isNaN(minute) ? prev.reminder.minute : minute
-      }
-    }));
-  }, []);
-
-  const handleApplyReminder = useCallback(async () => {
     if (!window.electronAPI) {
-      setError('Không thể lưu cài đặt nhắc nhở khi chạy trong trình duyệt.');
+      setError('Không thể thay đổi cài đặt này khi chạy trong trình duyệt.');
+      setOpenAtLoginState(!nextValue);
       return;
     }
 
+    try {
+      const result = await window.electronAPI.setOpenAtLogin(nextValue);
+      if (result && 'success' in result && !result.success) {
+        throw new Error(result.error || 'Không rõ nguyên nhân');
+      }
+      setStatusMessage('Đã lưu cài đặt khởi động cùng hệ thống.');
+    } catch (err: any) {
+      console.error('Lỗi khi cập nhật openAtLogin:', err);
+      setError(`Không thể lưu cài đặt khởi động: ${err?.message || err}`);
+      setOpenAtLoginState(!nextValue);
+    }
+  };
+
+  const handleReminderToggle: React.ChangeEventHandler<HTMLInputElement> = event => {
+    setReminderState(prev => ({ ...prev, enabled: event.target.checked }));
     setError(null);
-    setSuccessMessage(null);
+    setStatusMessage(null);
+  };
+
+  const handleTimeChange: React.ChangeEventHandler<HTMLInputElement> = event => {
+    const { hour, minute } = parseTime(event.target.value);
+    setReminderState(prev => ({ ...prev, hour, minute }));
+    setError(null);
+    setStatusMessage(null);
+  };
+
+  const handleSaveReminder = async () => {
+    if (!window.electronAPI) {
+      setError('Không thể lưu nhắc nhở khi chạy trong trình duyệt.');
+      return;
+    }
 
     try {
-      const result = await window.electronAPI.setReminder(settings.reminder);
-      if (!result.success) {
-        setError(`Lỗi lưu cài đặt nhắc nhở: ${result.error || 'Không rõ nguyên nhân'}`);
-      } else {
-        setSuccessMessage('Đã lưu cài đặt nhắc nhở!');
+      const result = await window.electronAPI.setReminder(reminder);
+      if (result && 'success' in result && !result.success) {
+        throw new Error(result.error || 'Không rõ nguyên nhân');
       }
+      setStatusMessage('Đã lưu cài đặt nhắc nhở.');
     } catch (err: any) {
-      setError(`Lỗi lưu cài đặt nhắc nhở: ${err?.message || err}`);
+      console.error('Không thể lưu nhắc nhở:', err);
+      setError(`Không thể lưu nhắc nhở: ${err?.message || err}`);
     }
-  }, [settings.reminder]);
-
-  const formattedReminderTime = useMemo(
-    () => `${String(settings.reminder.hour).padStart(2, '0')}:${String(settings.reminder.minute).padStart(2, '0')}`,
-    [settings.reminder.hour, settings.reminder.minute]
-  );
+  };
 
   if (isLoading) {
     return <div className="card">Đang tải cài đặt...</div>;
@@ -165,9 +165,17 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '24px'
+        }}
+      >
         <h2 style={{ margin: 0, color: '#1f2937' }}>Cài đặt</h2>
         <button
+          type="button"
           onClick={onClose}
           style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6b7280' }}
           aria-label="Đóng cài đặt"
@@ -182,31 +190,19 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
         </div>
       )}
 
-      {successMessage && (
+      {statusMessage && (
         <div style={{ color: '#047857', marginBottom: '16px' }}>
-          {successMessage}
-        </div>
-      )}
-
-      {!isElectronAvailable && (
-        <div style={{ color: '#6b7280', marginBottom: '16px' }}>
-          Một số tùy chọn sẽ bị vô hiệu hóa khi chạy trong môi trường trình duyệt.
+          {statusMessage}
         </div>
       )}
 
       <div className="input-group">
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <input
-            type="checkbox"
-            checked={settings.openAtLogin}
-            onChange={handleOpenAtLoginChange}
-            style={{ width: 'auto' }}
-            disabled={!isElectronAvailable}
-          />
+          <input type="checkbox" checked={openAtLogin} onChange={handleOpenAtLoginChange} style={{ width: 'auto' }} />
           Mở ứng dụng khi khởi động máy tính
         </label>
         <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px', marginTop: '4px' }}>
-          Lưu ý: Tính năng này chỉ hoạt động trên bản cài đặt (không hoạt động khi chạy dev).
+          Lưu ý: Tùy chọn này chỉ hoạt động khi ứng dụng được đóng gói (!isDev).
         </div>
       </div>
 
@@ -216,43 +212,32 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <input
             type="checkbox"
-            checked={settings.reminder.enabled}
-            onChange={handleReminderEnabledChange}
+            checked={reminder.enabled}
+            onChange={handleReminderToggle}
             style={{ width: 'auto' }}
           />
-          Bật nhắc nhở ôn bài hàng ngày
+          Bật nhắc nhở ôn tập hằng ngày
         </label>
       </div>
 
-      {settings.reminder.enabled && (
+      {reminder.enabled && (
         <div className="input-group" style={{ marginLeft: '24px' }}>
-          <label htmlFor="reminderTime">Thời gian nhắc nhở:</label>
+          <label htmlFor="reminderTime">Thời gian nhắc nhở</label>
           <input
-            type="time"
             id="reminderTime"
-            value={formattedReminderTime}
+            type="time"
+            value={formattedTime}
             onChange={handleTimeChange}
             style={{ width: 'auto', padding: '8px 12px' }}
           />
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-        <button onClick={handleApplyReminder} className="btn btn-primary" disabled={!isElectronAvailable}>
-          Lưu cài đặt nhắc nhở
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '24px' }}>
+        <button type="button" className="btn btn-primary" onClick={handleSaveReminder}>
+          Lưu nhắc nhở
         </button>
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginTop: '24px',
-          borderTop: '1px solid #e5e7eb',
-          paddingTop: '16px'
-        }}
-      >
-        <button onClick={onClose} className="btn btn-secondary">
+        <button type="button" className="btn btn-secondary" onClick={onClose}>
           Đóng
         </button>
       </div>
