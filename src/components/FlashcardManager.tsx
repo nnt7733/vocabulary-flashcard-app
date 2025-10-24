@@ -19,6 +19,7 @@ const FlashcardManager: React.FC = () => {
     durationMinutes: number;
     startedAt: Date;
     finishedAt: Date;
+    overdueReviewed: number;
   } | null>(null);
   const [currentSessionCards, setCurrentSessionCards] = useState<Flashcard[] | null>(null);
 
@@ -65,7 +66,7 @@ const FlashcardManager: React.FC = () => {
     dispatch({ type: 'START_STUDY' });
   };
 
-  const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt }: StudySessionResult) => {
+  const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt, overdueReviewed }: StudySessionResult) => {
     const updatedFlashcards = state.flashcards.map(card => {
       const updated = updatedCards.find(uc => uc.id === card.id);
       return updated || card;
@@ -81,7 +82,8 @@ const FlashcardManager: React.FC = () => {
       incorrectCards,
       durationMinutes,
       startedAt,
-      finishedAt
+      finishedAt,
+      overdueReviewed
     });
     setShowSummary(true);
     setCurrentSessionCards(null);
@@ -110,7 +112,8 @@ const FlashcardManager: React.FC = () => {
       date: now,
       cardsStudied,
       correctAnswers: sessionResults?.correctCount || 0,
-      totalTime: sessionResults ? Number(sessionResults.durationMinutes.toFixed(2)) : 0
+      totalTime: sessionResults ? Number(sessionResults.durationMinutes.toFixed(2)) : 0,
+      overdueReviews: sessionResults?.overdueReviewed || 0
     };
 
     dispatch({ type: 'ADD_STUDY_SESSION', payload: session });

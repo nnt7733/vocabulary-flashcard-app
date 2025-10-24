@@ -62,7 +62,8 @@ function reviveFlashcard(raw: any): Flashcard {
 function reviveStudySession(raw: any): StudySession {
   return {
     ...raw,
-    date: new Date(raw.date)
+    date: new Date(raw.date),
+    overdueReviews: typeof raw.overdueReviews === 'number' ? raw.overdueReviews : 0
   };
 }
 

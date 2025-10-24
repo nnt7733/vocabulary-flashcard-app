@@ -51,6 +51,12 @@ const LearningProgressTable: React.FC<LearningProgressTableProps> = ({ sessions 
       year: summary.year.correctAnswers
     },
     {
+      label: 'Từ trễ hạn đã ôn',
+      day: summary.day.overdueReviews,
+      month: summary.month.overdueReviews,
+      year: summary.year.overdueReviews
+    },
+    {
       label: 'Tỷ lệ chính xác',
       day: `${summary.day.accuracy}%`,
       month: `${summary.month.accuracy}%`,

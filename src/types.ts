@@ -23,6 +23,7 @@ export interface StudySession {
   cardsStudied: number;
   correctAnswers: number;
   totalTime: number; // in minutes
+  overdueReviews: number;
 }
 
 export interface AppState {

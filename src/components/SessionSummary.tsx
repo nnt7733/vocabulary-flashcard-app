@@ -138,6 +138,9 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
         <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '4px' }}>
           • Trả lời <strong>sai</strong> → Giảm 1 cấp độ
         </p>
+        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '4px' }}>
+          • Bỏ lỡ ôn tập <strong>3 ngày liên tiếp</strong> → Tự động giảm 1 cấp độ
+        </p>
         <p style={{ color: '#6b7280', fontSize: '14px' }}>
           • Sai <strong>2 lần liên tiếp</strong> → Reset về cấp 0
         </p>
