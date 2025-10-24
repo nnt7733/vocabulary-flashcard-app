@@ -55,6 +55,7 @@
   "build": {
     "appId": "com.vocabulary.flashcard",
     "productName": "Vocabulary Flashcard",
+    "publish": null,
     "files": [
       "build/**/*",
       "node_modules/**/*",
