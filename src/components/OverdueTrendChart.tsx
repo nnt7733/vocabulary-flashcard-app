@@ -1,0 +1,140 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { OverdueSnapshot, loadOverdueHistory } from '../utils/overdue';
+
+interface OverdueTrendChartProps {
+  currentCount: number;
+}
+
+const CHART_HEIGHT = 160;
+const CHART_WIDTH = 640;
+
+const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ currentCount }) => {
+  const [history, setHistory] = useState<OverdueSnapshot[]>([]);
+
+  useEffect(() => {
+    const snapshots = loadOverdueHistory();
+    setHistory(snapshots);
+  }, [currentCount]);
+
+  const chartData = useMemo(() => {
+    if (!history.length) {
+      return [] as OverdueSnapshot[];
+    }
+
+    return history
+      .slice(-14)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [history]);
+
+  const maxCount = useMemo(() => {
+    if (!chartData.length) {
+      return 1;
+    }
+    return Math.max(...chartData.map(point => point.count), 1);
+  }, [chartData]);
+
+  const points = useMemo(() => {
+    if (!chartData.length) {
+      return '';
+    }
+
+    const stepX = chartData.length > 1 ? CHART_WIDTH / (chartData.length - 1) : 0;
+
+    return chartData
+      .map((point, index) => {
+        const x = stepX * index;
+        const y = CHART_HEIGHT - (point.count / maxCount) * (CHART_HEIGHT - 20) - 10;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }, [chartData, maxCount]);
+
+  const labels = useMemo(() => {
+    return chartData.map(point => {
+      const date = new Date(point.date);
+      return date.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short' });
+    });
+  }, [chartData]);
+
+  if (!chartData.length) {
+    return (
+      <div className="card" style={{ marginTop: '16px', textAlign: 'left' }}>
+        <h2 style={{ marginBottom: '12px', color: '#1f2937' }}>📊 Xu hướng thẻ trễ hạn</h2>
+        <p style={{ color: '#6b7280' }}>
+          Khi bạn học và cập nhật thẻ mỗi ngày, biểu đồ này sẽ hiển thị xu hướng số lượng thẻ trễ hạn trong 2 tuần gần nhất.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginTop: '16px', textAlign: 'left' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div>
+          <h2 style={{ marginBottom: '4px', color: '#1f2937' }}>📊 Xu hướng thẻ trễ hạn</h2>
+          <p style={{ color: '#6b7280', margin: 0 }}>
+            Cập nhật hàng ngày. Hiện có <strong>{currentCount}</strong> thẻ đang quá hạn.
+          </p>
+        </div>
+      </div>
+      <div style={{ width: '100%', overflowX: 'auto' }}>
+        <svg
+          width="100%"
+          height={CHART_HEIGHT}
+          viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="overdueGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#f97316" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polyline
+            fill="none"
+            stroke="#f97316"
+            strokeWidth="3"
+            points={points}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <polygon
+            points={`${points} ${CHART_WIDTH},${CHART_HEIGHT} 0,${CHART_HEIGHT}`}
+            fill="url(#overdueGradient)"
+            opacity={0.6}
+          />
+          {chartData.map((point, index) => {
+            const stepX = chartData.length > 1 ? CHART_WIDTH / (chartData.length - 1) : 0;
+            const x = stepX * index;
+            const y = CHART_HEIGHT - (point.count / maxCount) * (CHART_HEIGHT - 20) - 10;
+            return (
+              <g key={point.date}>
+                <circle cx={x} cy={y} r={4} fill="#ea580c" />
+                <text
+                  x={x}
+                  y={CHART_HEIGHT - 2}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#6b7280"
+                >
+                  {labels[index]}
+                </text>
+                <text
+                  x={x}
+                  y={y - 10}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fill="#374151"
+                >
+                  {point.count}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+};
+
+export default OverdueTrendChart;
