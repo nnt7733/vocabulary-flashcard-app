@@ -1,82 +1,37 @@
 const { app, BrowserWindow, ipcMain, Notification } = require('electron');
 const path = require('path');
-const fs = require('fs');
+const Store = require('electron-store');
+const schedule = require('node-schedule');
 
 // Check if running in development mode
 const isDev = process.env.NODE_ENV === 'development' || process.env.ELECTRON_IS_DEV === '1';
 
-const defaultSettings = {
-  openAtLogin: false,
-  reminder: {
-    enabled: false,
-    hour: 8,
-    minute: 0
-  }
-};
-
 let mainWindow;
-let settings = { ...defaultSettings };
-let reminderTimer = null;
-
-function getSettingsFilePath() {
-  return path.join(app.getPath('userData'), 'settings.json');
-}
-
-function loadSettings() {
-  try {
-    const filePath = getSettingsFilePath();
-    if (fs.existsSync(filePath)) {
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-      settings = {
-        ...defaultSettings,
-        ...data,
-        reminder: {
-          ...defaultSettings.reminder,
-          ...(data?.reminder ?? {})
-        }
-      };
-    } else {
-      settings = { ...defaultSettings };
+const store = new Store({
+  defaults: {
+    openAtLogin: false,
+    reminder: {
+      enabled: false,
+      hour: 8,
+      minute: 0
     }
-  } catch (error) {
-    console.error('Không thể đọc cài đặt, sử dụng giá trị mặc định.', error);
-    settings = { ...defaultSettings };
   }
-}
+});
 
-function saveSettings() {
-  try {
-    const filePath = getSettingsFilePath();
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Không thể lưu cài đặt:', error);
-  }
-}
+let reminderJob = null;
 
 function scheduleReminder() {
-  if (reminderTimer) {
-    clearTimeout(reminderTimer);
-    reminderTimer = null;
+  if (reminderJob) {
+    reminderJob.cancel();
+    reminderJob = null;
   }
 
-  const reminderSettings = settings.reminder;
+  const reminderSettings = store.get('reminder');
 
   if (reminderSettings?.enabled) {
-    const now = new Date();
-    const nextTrigger = new Date();
-    nextTrigger.setHours(reminderSettings.hour, reminderSettings.minute, 0, 0);
+    const { hour, minute } = reminderSettings;
 
-    if (nextTrigger <= now) {
-      nextTrigger.setDate(nextTrigger.getDate() + 1);
-    }
-
-    const delay = nextTrigger.getTime() - now.getTime();
-    console.log(
-      `Đã đặt lịch nhắc nhở vào ${nextTrigger.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${nextTrigger.toLocaleDateString()}).`
-    );
-
-    reminderTimer = setTimeout(() => {
+    reminderJob = schedule.scheduleJob({ hour, minute, second: 0 }, () => {
       if (mainWindow) {
         mainWindow.show();
         mainWindow.focus();
@@ -90,9 +45,15 @@ function scheduleReminder() {
 
         mainWindow.webContents.send('show-reminder');
       }
+    });
 
-      scheduleReminder();
-    }, delay);
+    if (reminderJob) {
+      console.log(
+        `Đã đặt lịch nhắc nhở hàng ngày vào ${hour.toString().padStart(2, '0')}:${minute
+          .toString()
+          .padStart(2, '0')}.`
+      );
+    }
   } else {
     console.log('Tính năng nhắc nhở đang tắt.');
   }
@@ -100,18 +61,18 @@ function scheduleReminder() {
 
 function setupIPCHandlers() {
   ipcMain.handle('settings:get', () => ({
-    openAtLogin: settings.openAtLogin,
-    reminder: settings.reminder
+    openAtLogin: store.get('openAtLogin'),
+    reminder: store.get('reminder')
   }));
 
   ipcMain.handle('settings:set-open-at-login', async (_event, enabled) => {
-    settings.openAtLogin = Boolean(enabled);
-    saveSettings();
+    const openAtLogin = Boolean(enabled);
+    store.set('openAtLogin', openAtLogin);
 
     if (!isDev) {
       try {
         app.setLoginItemSettings({
-          openAtLogin: enabled,
+          openAtLogin,
           path: app.getPath('exe')
         });
       } catch (error) {
@@ -124,17 +85,19 @@ function setupIPCHandlers() {
   });
 
   ipcMain.handle('settings:set-reminder', (_event, reminderSettings) => {
-    const sanitizedReminder = {
-      enabled: Boolean(reminderSettings?.enabled),
-      hour: Math.min(23, Math.max(0, Number(reminderSettings?.hour ?? defaultSettings.reminder.hour))),
-      minute: Math.min(59, Math.max(0, Number(reminderSettings?.minute ?? defaultSettings.reminder.minute)))
+    const normalizeNumber = (value, fallback, min, max) => {
+      const parsed = Number(value);
+      const safeValue = Number.isFinite(parsed) ? parsed : fallback;
+      return Math.min(max, Math.max(min, safeValue));
     };
 
-    settings.reminder = {
-      ...defaultSettings.reminder,
-      ...sanitizedReminder
+    const sanitizedReminder = {
+      enabled: Boolean(reminderSettings?.enabled),
+      hour: normalizeNumber(reminderSettings?.hour, 8, 0, 23),
+      minute: normalizeNumber(reminderSettings?.minute, 0, 0, 59)
     };
-    saveSettings();
+
+    store.set('reminder', sanitizedReminder);
     scheduleReminder();
     return { success: true };
   });
@@ -179,16 +142,15 @@ function createWindow() {
 }
 
 app.on('ready', () => {
-  loadSettings();
   createWindow();
   setupIPCHandlers();
   scheduleReminder();
 });
 
 app.on('before-quit', () => {
-  if (reminderTimer) {
-    clearTimeout(reminderTimer);
-    reminderTimer = null;
+  if (reminderJob) {
+    reminderJob.cancel();
+    reminderJob = null;
   }
 });
 
