@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Flashcard } from '../types';
+import styles from './EditForm.module.css';
 
 interface EditFormProps {
   card: Flashcard;
@@ -55,17 +56,12 @@ const EditForm: React.FC<EditFormProps> = ({ card, onSave, onCancel }) => {
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, color: '#1f2937' }}>Chỉnh sửa từ vựng</h2>
-        <button 
+      <div className={styles.headerRow}>
+        <h2 className={styles.title}>Chỉnh sửa từ vựng</h2>
+        <button
           onClick={onCancel}
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            fontSize: '24px', 
-            cursor: 'pointer',
-            color: '#6b7280'
-          }}
+          className={styles.closeButton}
+          type="button"
         >
           ×
         </button>
@@ -108,14 +104,14 @@ const EditForm: React.FC<EditFormProps> = ({ card, onSave, onCancel }) => {
           onBlur={(e) => validateLevel(e.target.value)}
         />
         {levelError && (
-          <div style={{ color: '#b91c1c', fontSize: '12px', marginTop: '4px' }}>{levelError}</div>
+          <div className={styles.levelError}>{levelError}</div>
         )}
-        <div style={{ color: '#6b7280', fontSize: '12px' }}>
+        <div className={styles.levelHint}>
           Đặt cấp độ để điều chỉnh lịch ôn. 0 = thẻ mới; 5 = cấp cao nhất.
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+      <div className={styles.actions}>
         <button onClick={onCancel} className="btn btn-secondary">
           Hủy
         </button>

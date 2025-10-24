@@ -3,6 +3,7 @@ import { Flashcard } from '../types';
 import EditForm from './EditForm';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { calculateCardUrgency, sortCardsByUrgency } from '../utils/overdue';
+import styles from './FlashcardList.module.css';
 
 interface FlashcardListProps {
   flashcards: Flashcard[];
@@ -62,19 +63,7 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
 
     if (urgency.isLongOverdue) {
       return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: '#fee2e2',
-            color: '#b91c1c',
-            padding: '4px 8px',
-            borderRadius: '999px',
-            fontSize: '12px',
-            fontWeight: 600
-          }}
-        >
+        <span className={`${styles.urgencyBadge} ${styles.urgencyDanger}`}>
           🚨 Quá hạn {urgency.overdueDays} ngày
         </span>
       );
@@ -82,19 +71,7 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
 
     if (urgency.isOverdue) {
       return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: '#fef3c7',
-            color: '#b45309',
-            padding: '4px 8px',
-            borderRadius: '999px',
-            fontSize: '12px',
-            fontWeight: 600
-          }}
-        >
+        <span className={`${styles.urgencyBadge} ${styles.urgencyWarning}`}>
           ⚠️ Trễ {urgency.overdueDays} ngày
         </span>
       );
@@ -102,19 +79,7 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
 
     if (urgency.isDueSoon) {
       return (
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: '#e0f2fe',
-            color: '#0369a1',
-            padding: '4px 8px',
-            borderRadius: '999px',
-            fontSize: '12px',
-            fontWeight: 600
-          }}
-        >
+        <span className={`${styles.urgencyBadge} ${styles.urgencyInfo}`}>
           ⏰ Còn {urgency.daysUntilDue} ngày để ôn
         </span>
       );
@@ -124,85 +89,43 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
   };
 
   return (
-    <div
-      style={{
-        ...style,
-        padding: '8px 0'
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          background: 'white',
-          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '8px'
-            }}
-          >
+    <div style={style} className={styles.listRow}>
+      <div className={styles.card}>
+        <div className={styles.cardContent}>
+          <div className={styles.cardHeader}>
             <span
-              style={{
-                background: isLearned ? '#10b981' : data.getLevelColor(card.currentLevel),
-                color: 'white',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
+              className={styles.levelBadge}
+              style={{ background: isLearned ? '#10b981' : data.getLevelColor(card.currentLevel) }}
             >
               {isLearned ? 'Đã hoàn thành' : `Cấp ${card.currentLevel}`}
             </span>
-            <span
-              style={{
-                color: '#6b7280',
-                fontSize: '14px'
-              }}
-            >
+            <span className={styles.statusText}>
               {isLearned ? 'Không cần ôn thêm' : `Ôn lại sau: ${data.getLevelText(card.currentLevel)}`}
             </span>
             {renderUrgencyBadge()}
           </div>
-          <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px' }}>
+          <div className={styles.term}>
             {card.term}
           </div>
-          <div style={{ color: '#6b7280', fontSize: '14px' }}>
+          <div className={styles.definition}>
             {card.definition}
           </div>
-          <div
-            style={{
-              color: '#9ca3af',
-              fontSize: '12px',
-              marginTop: '8px'
-            }}
-          >
+          <div className={styles.meta}>
             Tạo: {new Date(card.createdAt).toLocaleDateString('vi-VN')} • Lần ôn: {card.repetitions.length}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className={styles.actions}>
           {isLearned ? (
             <>
               <button
                 onClick={() => data.onRestore(card)}
-                className="btn btn-secondary"
-                style={{ padding: '8px 12px', fontSize: '14px' }}
+                className={`${styles.actionButton} btn btn-secondary`}
               >
                 🔄 Khôi phục
               </button>
               <button
                 onClick={() => data.onDelete(card.id)}
-                className="btn btn-danger"
-                style={{ padding: '8px 12px', fontSize: '14px' }}
+                className={`${styles.actionButton} btn btn-danger`}
               >
                 🗑️ Xóa
               </button>
@@ -211,15 +134,13 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
             <>
               <button
                 onClick={() => data.onEdit(card)}
-                className="btn btn-secondary"
-                style={{ padding: '8px 12px', fontSize: '14px' }}
+                className={`${styles.actionButton} btn btn-secondary`}
               >
                 ✏️ Sửa
               </button>
               <button
                 onClick={() => data.onDelete(card.id)}
-                className="btn btn-danger"
-                style={{ padding: '8px 12px', fontSize: '14px' }}
+                className={`${styles.actionButton} btn btn-danger`}
               >
                 🗑️ Xóa
               </button>
@@ -322,15 +243,15 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
   if (showDeleteConfirm) {
     return (
       <div className="card">
-        <div style={{ textAlign: 'center', padding: '24px' }}>
-          <h3 style={{ color: '#dc2626', marginBottom: '16px' }}>
+        <div className={styles.deleteConfirm}>
+          <h3 className={styles.deleteConfirmTitle}>
             ⚠️ Xóa toàn bộ từ vựng
           </h3>
-          <p style={{ color: '#6b7280', marginBottom: '24px' }}>
+          <p className={styles.deleteConfirmText}>
             Bạn có chắc chắn muốn xóa <strong>{flashcards.length} từ vựng</strong>?<br/>
             Hành động này không thể hoàn tác!
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+          <div className={styles.deleteConfirmActions}>
             <button
               onClick={() => setShowDeleteConfirm(false)}
               className="btn btn-secondary"
@@ -351,8 +272,8 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, color: '#1f2937' }}>
+      <div className={styles.listContainer}>
+        <h2 className={styles.listTitle}>
           Quản lý từ vựng ({activeCards.length} đang học • {learnedCards.length} đã hoàn thành)
         </h2>
         <button
@@ -371,7 +292,7 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+          <div className={styles.tabControls}>
             <button
               onClick={() => setActiveTab('active')}
               className={`btn ${activeTab === 'active' ? 'btn-primary' : 'btn-secondary'}`}
