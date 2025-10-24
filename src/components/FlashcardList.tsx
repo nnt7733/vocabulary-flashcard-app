@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Flashcard } from '../types';
 import EditForm from './EditForm';
 import { FixedSizeList as List, ListChildComponentProps } from '../lib/react-window';
+import { calculateCardUrgency, sortCardsByUrgency } from '../utils/overdue';
 
 interface FlashcardListProps {
   flashcards: Flashcard[];
@@ -41,6 +42,7 @@ type ListData = {
   onRestore: (card: Flashcard) => void;
   getLevelColor: (level: number) => string;
   getLevelText: (level: number) => string;
+  getUrgency: (card: Flashcard) => ReturnType<typeof calculateCardUrgency>;
 };
 
 const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, style, data }) => {
@@ -51,6 +53,75 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
   }
 
   const isLearned = card.status === 'learned';
+  const urgency = data.getUrgency(card);
+
+  const renderUrgencyBadge = () => {
+    if (isLearned) {
+      return null;
+    }
+
+    if (urgency.isLongOverdue) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: '#fee2e2',
+            color: '#b91c1c',
+            padding: '4px 8px',
+            borderRadius: '999px',
+            fontSize: '12px',
+            fontWeight: 600
+          }}
+        >
+          🚨 Quá hạn {urgency.overdueDays} ngày
+        </span>
+      );
+    }
+
+    if (urgency.isOverdue) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: '#fef3c7',
+            color: '#b45309',
+            padding: '4px 8px',
+            borderRadius: '999px',
+            fontSize: '12px',
+            fontWeight: 600
+          }}
+        >
+          ⚠️ Trễ {urgency.overdueDays} ngày
+        </span>
+      );
+    }
+
+    if (urgency.isDueSoon) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: '#e0f2fe',
+            color: '#0369a1',
+            padding: '4px 8px',
+            borderRadius: '999px',
+            fontSize: '12px',
+            fontWeight: 600
+          }}
+        >
+          ⏰ Còn {urgency.daysUntilDue} ngày để ôn
+        </span>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div
@@ -100,6 +171,7 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
             >
               {isLearned ? 'Không cần ôn thêm' : `Ôn lại sau: ${data.getLevelText(card.currentLevel)}`}
             </span>
+            {renderUrgencyBadge()}
           </div>
           <div style={{ fontWeight: 600, color: '#1f2937', marginBottom: '4px' }}>
             {card.term}
@@ -212,12 +284,17 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
     [flashcards]
   );
 
+  const sortedActiveCards = useMemo(
+    () => sortCardsByUrgency(activeCards),
+    [activeCards]
+  );
+
   const learnedCards = useMemo(
     () => flashcards.filter(card => card.status === 'learned'),
     [flashcards]
   );
 
-  const cardsToRender = activeTab === 'active' ? activeCards : learnedCards;
+  const cardsToRender = activeTab === 'active' ? sortedActiveCards : learnedCards;
 
   const listData = useMemo<ListData>(
     () => ({
@@ -226,7 +303,8 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
       onDelete: handleDelete,
       onRestore: handleRestore,
       getLevelColor,
-      getLevelText
+      getLevelText,
+      getUrgency: calculateCardUrgency
     }),
     [cardsToRender, handleEdit, handleDelete, handleRestore]
   );

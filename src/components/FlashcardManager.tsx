@@ -7,6 +7,14 @@ import SessionSummary from './SessionSummary';
 import FlashcardList from './FlashcardList';
 import { useAppContext } from '../context/AppContext';
 import LearningProgressTable from './LearningProgressTable';
+import {
+  getDueSoonCards,
+  getLongOverdueCards,
+  getOverdueCards,
+  sortCardsByUrgency
+} from '../utils/overdue';
+import PriorityReviewPanel from './PriorityReviewPanel';
+import OverdueTrendChart from './OverdueTrendChart';
 
 const FlashcardManager: React.FC = () => {
   const { state, dispatch, storageError, clearStorageError } = useAppContext();
@@ -34,14 +42,28 @@ const FlashcardManager: React.FC = () => {
   );
 
   const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
+  const overdueCards = useMemo(() => getOverdueCards(activeFlashcards), [activeFlashcards]);
+  const longOverdueCards = useMemo(() => getLongOverdueCards(activeFlashcards), [activeFlashcards]);
+  const dueSoonCards = useMemo(() => getDueSoonCards(activeFlashcards), [activeFlashcards]);
   const cardsForReview = useMemo(
-    () => getCardsForReview(activeFlashcards, { excludeNewToday: true }),
+    () => sortCardsByUrgency(getCardsForReview(activeFlashcards, { excludeNewToday: true })),
     [activeFlashcards]
   );
   const todaysNewCards = useMemo(
     () => getTodayNewCards(activeFlashcards),
     [activeFlashcards]
   );
+  const overdueCount = overdueCards.length;
+  const priorityCards = useMemo(() => {
+    const combined = [...longOverdueCards, ...overdueCards, ...dueSoonCards];
+    const unique = new Map<string, Flashcard>();
+    combined.forEach(card => {
+      if (!unique.has(card.id)) {
+        unique.set(card.id, card);
+      }
+    });
+    return sortCardsByUrgency(Array.from(unique.values())).slice(0, 5);
+  }, [dueSoonCards, longOverdueCards, overdueCards]);
 
   const handleImport = (cards: { term: string; definition: string }[]) => {
     if (!cards.length) return;
@@ -243,7 +265,7 @@ const FlashcardManager: React.FC = () => {
               <div className="stat-number">{stats.due}</div>
               <div className="stat-label">Cần ôn tập</div>
             </div>
-            <div className="stat-card">
+          <div className="stat-card">
               <div className="stat-number">{state.studySessions.length}</div>
               <div className="stat-label">Phiên học</div>
             </div>
@@ -252,6 +274,17 @@ const FlashcardManager: React.FC = () => {
               <div className="stat-label">Đã hoàn thành</div>
             </div>
           </div>
+
+          <OverdueTrendChart currentCount={overdueCount} />
+
+          <PriorityReviewPanel
+            overdueCards={overdueCards}
+            longOverdueCards={longOverdueCards}
+            dueSoonCards={dueSoonCards}
+            topCards={priorityCards}
+            onStartReview={() => handleStartStudy('review')}
+            onOpenFlashcardList={() => setShowFlashcardList(true)}
+          />
 
           <LearningProgressTable sessions={state.studySessions} />
 

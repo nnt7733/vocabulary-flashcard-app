@@ -6,6 +6,7 @@ import {
   saveFlashcards,
   saveStudySessions
 } from '../utils/storage';
+import { recordOverdueSnapshot } from '../utils/overdue';
 
 type ImportedCard = { term: string; definition: string };
 
@@ -265,6 +266,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       window.localStorage.setItem('flashcards', JSON.stringify(state.flashcards));
       setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
+    }
+
+    try {
+      recordOverdueSnapshot(state.flashcards);
+    } catch (error) {
+      console.warn('[FlashcardApp] Không thể cập nhật lịch sử trễ hạn:', error);
     }
   }, [state.flashcards, supportsIndexedDB]);
 
