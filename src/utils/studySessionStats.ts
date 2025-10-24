@@ -6,6 +6,7 @@ interface TimeframeSummary {
   correctAnswers: number;
   minutes: number;
   accuracy: number;
+  overdueReviews: number;
 }
 
 export interface AggregatedStudySummary {
@@ -26,9 +27,10 @@ function createSummary(sessions: StudySession[], start: Date, end: Date): Timefr
       acc.cardsStudied += session.cardsStudied;
       acc.correctAnswers += session.correctAnswers;
       acc.minutes += session.totalTime || 0;
+      acc.overdueReviews += session.overdueReviews ?? 0;
       return acc;
     },
-    { sessions: 0, cardsStudied: 0, correctAnswers: 0, minutes: 0 }
+    { sessions: 0, cardsStudied: 0, correctAnswers: 0, minutes: 0, overdueReviews: 0 }
   );
 
   const accuracy = totals.cardsStudied > 0

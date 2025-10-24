@@ -30,10 +30,22 @@ export function updateCardAfterReview(
   responseTime: number
 ): Flashcard {
   const now = new Date();
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  let baseLevel = card.currentLevel;
+
+  if (card.nextReviewDate < now) {
+    const overdueDays = Math.floor((now.getTime() - card.nextReviewDate.getTime()) / millisecondsPerDay);
+    if (overdueDays >= 3) {
+      const levelPenalty = Math.floor(overdueDays / 3);
+      baseLevel = Math.max(0, baseLevel - levelPenalty);
+    }
+  }
+
+  const wasDowngradedDueToInactivity = baseLevel < card.currentLevel;
 
   // Add new repetition record
   const newRepetition = {
-    level: card.currentLevel,
+    level: baseLevel,
     date: now,
     correct,
     responseTime
@@ -41,13 +53,14 @@ export function updateCardAfterReview(
 
   const updatedRepetitions = [...card.repetitions, newRepetition];
 
-  let newLevel = card.currentLevel;
+  let newLevel = baseLevel;
   let nextReviewDate = card.nextReviewDate;
-  let status: Flashcard['status'] = card.status ?? 'active';
+  const initialStatus: Flashcard['status'] = card.status ?? 'active';
+  let status: Flashcard['status'] = wasDowngradedDueToInactivity ? 'active' : initialStatus;
 
   if (correct) {
     // Move to next level if correct
-    newLevel = Math.min(card.currentLevel + 1, SPACED_REPETITION_SCHEDULE.length - 1);
+    newLevel = Math.min(baseLevel + 1, SPACED_REPETITION_SCHEDULE.length - 1);
     nextReviewDate = calculateNextReviewDate(newLevel, now);
 
     status = newLevel === SPACED_REPETITION_SCHEDULE.length - 1 ? 'learned' : 'active';
@@ -63,7 +76,7 @@ export function updateCardAfterReview(
       newLevel = 0;
     } else {
       // Decrease by 1 level (but not below 0)
-      newLevel = Math.max(card.currentLevel - 1, 0);
+      newLevel = Math.max(baseLevel - 1, 0);
     }
 
     nextReviewDate = calculateNextReviewDate(newLevel, now);

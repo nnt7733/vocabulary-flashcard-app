@@ -20,6 +20,7 @@ export interface StudySessionResult {
   startedAt: Date;
   finishedAt: Date;
   durationMs: number;
+  overdueReviewed: number;
 }
 
 const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }) => {
@@ -34,6 +35,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     incorrect: 0,
     total: cards.length
   });
+  const [overdueCount, setOverdueCount] = useState(0);
   // Keep action history to support Undo
   const [actionHistory, setActionHistory] = useState<Array<{
     cardId: string;
@@ -41,6 +43,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     wasCorrect: boolean;
     incorrectIndex: number | null;
     hadExistingUpdate: boolean;
+    wasOverdue: boolean;
   }>>([]);
 
   const totalCards = cards.length;
@@ -61,6 +64,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       incorrect: 0,
       total: cards.length
     });
+    setOverdueCount(0);
     return () => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -145,6 +149,9 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     const responseTime = Date.now() - startTime;
     const previousCardState = updatedCardsMap.get(currentCard.id) || currentCard;
     const hadExistingUpdate = updatedCardsMap.has(currentCard.id);
+    const now = new Date();
+    const wasOverdue = previousCardState.nextReviewDate < now;
+    const nextOverdueCount = wasOverdue ? overdueCount + 1 : overdueCount;
     const updatedCard = updateCardAfterReview(previousCardState, correct, responseTime);
 
     // Save history snapshot for undo
@@ -156,7 +163,8 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         prevCard: previousCardState,
         wasCorrect: correct,
         incorrectIndex: nextIncorrectIndex,
-        hadExistingUpdate
+        hadExistingUpdate,
+        wasOverdue
       }
     ]);
 
@@ -168,6 +176,10 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     // Add to incorrect cards list if answer is wrong
     const nextIncorrectCards = correct ? incorrectCards : [...incorrectCards, updatedCard];
     setIncorrectCards(nextIncorrectCards);
+
+    if (wasOverdue) {
+      setOverdueCount(prev => prev + 1);
+    }
 
     const nextStats = {
       ...sessionStats,
@@ -197,10 +209,11 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         stats: nextStats,
         startedAt,
         finishedAt,
-        durationMs: finishedAt.getTime() - sessionStartRef.current
+        durationMs: finishedAt.getTime() - sessionStartRef.current,
+        overdueReviewed: nextOverdueCount
       });
     }
-  }, [cards, currentCard, currentIndex, incorrectCards, onComplete, sessionStats, startTime, updatedCardsMap]);
+  }, [cards, currentCard, currentIndex, incorrectCards, onComplete, overdueCount, sessionStats, startTime, updatedCardsMap]);
 
   const handleSpeak = useCallback(() => {
     if (currentCard) {
@@ -270,6 +283,10 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         newIncorrect.splice(incorrectIdx, 1);
         setIncorrectCards(newIncorrect);
       }
+    }
+
+    if (lastAction.wasOverdue) {
+      setOverdueCount(prev => Math.max(prev - 1, 0));
     }
 
     // Update stats
