@@ -228,7 +228,7 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         return;
       }
 
-      if (!isFlipped && (event.code === 'Space' || event.code === 'Enter')) {
+      if (event.code === 'Space' || event.code === 'Enter') {
         event.preventDefault();
         handleFlip();
         return;
@@ -374,8 +374,10 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
           color: '#9ca3af',
           fontSize: '14px'
         }}>
-          {isFlipped ? 'Nhấn để xem thuật ngữ' : 'Nhấn để xem định nghĩa'}
-        </div>
+          {isFlipped
+            ? 'Nhấn hoặc phím Space để xem thuật ngữ'
+            : 'Nhấn hoặc phím Space để xem định nghĩa'}
+       </div>
       </div>
 
       {isFlipped && (
