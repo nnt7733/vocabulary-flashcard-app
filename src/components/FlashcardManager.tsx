@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Flashcard } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Flashcard, StudySession } from '../types';
 import { getCardsForReview, getStudyStats, getTodayNewCards } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
 import StudySession, { StudySessionResult } from './StudySession';
@@ -32,6 +32,25 @@ const FlashcardManager: React.FC = () => {
     overdueReviewed: number;
   } | null>(null);
   const [currentSessionCards, setCurrentSessionCards] = useState<Flashcard[] | null>(null);
+  const [uiMessage, setUiMessage] = useState<{
+    type: 'info' | 'success' | 'warning' | 'error';
+    text: string;
+  } | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!uiMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setUiMessage(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [uiMessage]);
 
   const activeFlashcards = useMemo(
     () => state.flashcards.filter(card => card.status !== 'learned'),
@@ -77,14 +96,16 @@ const FlashcardManager: React.FC = () => {
       : todaysNewCards;
 
     if (cardsToStudy.length === 0) {
-      if (mode === 'review') {
-        alert('Không có thẻ nào cần ôn tập vào lúc này!');
-      } else {
-        alert('Hôm nay bạn chưa thêm thẻ mới nào để học.');
-      }
+      setUiMessage({
+        type: 'info',
+        text: mode === 'review'
+          ? 'Không có thẻ nào cần ôn tập vào lúc này. Hãy quay lại sau hoặc thêm thẻ mới để tiếp tục tiến độ!'
+          : 'Hôm nay bạn chưa thêm thẻ mới nào để học. Thêm vài thẻ mới để bắt đầu phiên học nhé!'
+      });
       return;
     }
 
+    setUiMessage(null);
     setCurrentSessionCards(cardsToStudy);
     dispatch({ type: 'START_STUDY' });
   };
@@ -158,6 +179,132 @@ const FlashcardManager: React.FC = () => {
     dispatch({ type: 'DELETE_ALL_FLASHCARDS' });
   };
 
+  const generateId = () =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+  const reviveFlashcardFromBackup = (card: any): Flashcard => ({
+    id: typeof card?.id === 'string' ? card.id : generateId(),
+    term: typeof card?.term === 'string' ? card.term : '',
+    definition: typeof card?.definition === 'string' ? card.definition : '',
+    createdAt: card?.createdAt ? new Date(card.createdAt) : new Date(),
+    repetitions: Array.isArray(card?.repetitions)
+      ? card.repetitions.map((rep: any) => ({
+          ...rep,
+          level: typeof rep?.level === 'number' ? rep.level : 0,
+          date: rep?.date ? new Date(rep.date) : new Date(),
+          correct: Boolean(rep?.correct),
+          responseTime: typeof rep?.responseTime === 'number' ? rep.responseTime : 0
+        }))
+      : [],
+    currentLevel: typeof card?.currentLevel === 'number' ? card.currentLevel : 0,
+    nextReviewDate: card?.nextReviewDate ? new Date(card.nextReviewDate) : new Date(),
+    isNew: Boolean(card?.isNew),
+    status: card?.status === 'learned' ? 'learned' : 'active'
+  });
+
+  const reviveSessionFromBackup = (session: any): StudySession => ({
+    id: typeof session?.id === 'string' ? session.id : generateId(),
+    date: session?.date ? new Date(session.date) : new Date(),
+    cardsStudied: typeof session?.cardsStudied === 'number' ? session.cardsStudied : 0,
+    correctAnswers: typeof session?.correctAnswers === 'number' ? session.correctAnswers : 0,
+    totalTime: typeof session?.totalTime === 'number' ? session.totalTime : 0,
+    overdueReviews: typeof session?.overdueReviews === 'number' ? session.overdueReviews : 0
+  });
+
+  const handleExportBackup = () => {
+    if (state.flashcards.length === 0 && state.studySessions.length === 0) {
+      setUiMessage({
+        type: 'warning',
+        text: 'Không có dữ liệu để xuất. Hãy thêm thẻ hoặc tạo phiên học trước khi sao lưu.'
+      });
+      return;
+    }
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      flashcards: state.flashcards,
+      studySessions: state.studySessions
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `flashcards-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setUiMessage({
+      type: 'success',
+      text: 'Đã xuất bản sao lưu JSON. Hãy lưu giữ tệp ở nơi an toàn!'
+    });
+  };
+
+  const handleBackupFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const input = event.target;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const raw = JSON.parse(String(reader.result));
+        if (!raw || typeof raw !== 'object') {
+          throw new Error('Tệp không chứa dữ liệu hợp lệ.');
+        }
+
+        const restoredFlashcards = Array.isArray((raw as any).flashcards)
+          ? (raw as any).flashcards
+              .map((card: any) => reviveFlashcardFromBackup(card))
+              .filter(card => Boolean(card.term) && Boolean(card.definition))
+          : [];
+        const restoredSessions = Array.isArray((raw as any).studySessions)
+          ? (raw as any).studySessions.map((session: any) => reviveSessionFromBackup(session))
+          : [];
+
+        dispatch({
+          type: 'HYDRATE_FROM_STORAGE',
+          payload: {
+            flashcards: restoredFlashcards,
+            studySessions: restoredSessions
+          }
+        });
+
+        setUiMessage({
+          type: 'success',
+          text: `Đã nhập ${restoredFlashcards.length} thẻ và ${restoredSessions.length} phiên học từ bản sao lưu.`
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Không thể đọc tệp JSON.';
+        setUiMessage({
+          type: 'error',
+          text: `Không thể nhập dữ liệu: ${message}`
+        });
+      } finally {
+        input.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setUiMessage({
+        type: 'error',
+        text: 'Đã xảy ra lỗi khi đọc tệp sao lưu. Hãy thử lại với tệp khác.'
+      });
+      input.value = '';
+    };
+
+    reader.readAsText(file);
+  };
+
+  const handleImportBackup = () => {
+    backupInputRef.current?.click();
+  };
+
   const storageBanner = storageError ? (
     <div className="storage-alert" role="alert">
       <div>
@@ -170,6 +317,15 @@ const FlashcardManager: React.FC = () => {
     </div>
   ) : null;
 
+  const notificationBanner = uiMessage ? (
+    <div className={`inline-banner inline-banner--${uiMessage.type}`} role="status">
+      <span>{uiMessage.text}</span>
+      <button type="button" onClick={() => setUiMessage(null)} aria-label="Đóng thông báo">
+        ×
+      </button>
+    </div>
+  ) : null;
+
   if (showSettings) {
     return (
       <div className="container">
@@ -178,6 +334,7 @@ const FlashcardManager: React.FC = () => {
           <p>Hệ thống học từ vựng với spaced repetition</p>
         </div>
         {storageBanner}
+        {notificationBanner}
         <SettingsForm onClose={() => setShowSettings(false)} />
       </div>
     );
@@ -191,6 +348,7 @@ const FlashcardManager: React.FC = () => {
           <p>Hệ thống học từ vựng với spaced repetition</p>
         </div>
         {storageBanner}
+        {notificationBanner}
         <SessionSummary
           correctCount={sessionResults.correctCount}
           incorrectCount={sessionResults.incorrectCount}
@@ -211,6 +369,7 @@ const FlashcardManager: React.FC = () => {
           <p>Hệ thống học từ vựng với spaced repetition</p>
         </div>
         {storageBanner}
+        {notificationBanner}
         <FlashcardList
           flashcards={state.flashcards}
           onUpdateCard={handleUpdateCard}
@@ -237,6 +396,7 @@ const FlashcardManager: React.FC = () => {
     return (
       <>
         {storageBanner}
+        {notificationBanner}
         <StudySession
           cards={cardsToStudy}
           onComplete={handleStudyComplete}
@@ -254,6 +414,7 @@ const FlashcardManager: React.FC = () => {
       </div>
 
       {storageBanner}
+      {notificationBanner}
 
       {state.showImportForm ? (
         <ImportForm
@@ -319,45 +480,64 @@ const FlashcardManager: React.FC = () => {
               </p>
             </div>
 
-            <div className="controls">
-              <button
-                onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
-                className="btn btn-primary"
-              >
-                ➕ Thêm từ mới
+          <div className="controls">
+            <button
+              onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
+              className="btn btn-primary"
+            >
+              ➕ Thêm từ mới
+            </button>
+            <button
+              onClick={() => setShowFlashcardList(true)}
+              className="btn btn-secondary"
+              disabled={state.flashcards.length === 0}
+            >
+              📝 Quản lý từ vựng
+            </button>
+            <button
+              onClick={() => handleStartStudy('newToday')}
+              className="btn btn-secondary"
+              disabled={todaysNewCards.length === 0}
+              title={todaysNewCards.length === 0 ? 'Chưa có thẻ mới nào trong ngày hôm nay' : 'Học các thẻ mới vừa thêm'}
+              style={todaysNewCards.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
+              🌱 Học từ mới hôm nay
+            </button>
+            <button
+              onClick={() => handleStartStudy('review')}
+              className="btn btn-success"
+              disabled={cardsForReview.length === 0}
+              title={cardsForReview.length === 0 ? 'Không có thẻ cần ôn hôm nay' : 'Bắt đầu học'}
+              style={cardsForReview.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+            >
+              🚀 Bắt đầu học
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="btn btn-secondary"
+            >
+              ⚙️ Cài đặt
+            </button>
+          </div>
+
+          <div className="backup-controls">
+            <p>📦 Sao lưu dữ liệu định kỳ để tránh mất mát.</p>
+            <div className="backup-controls__actions">
+              <button onClick={handleExportBackup} className="btn btn-secondary">
+                ⬇️ Xuất JSON
               </button>
-              <button
-                onClick={() => setShowFlashcardList(true)}
-                className="btn btn-secondary"
-                disabled={state.flashcards.length === 0}
-              >
-                📝 Quản lý từ vựng
-              </button>
-              <button
-                onClick={() => handleStartStudy('newToday')}
-                className="btn btn-secondary"
-                disabled={todaysNewCards.length === 0}
-                title={todaysNewCards.length === 0 ? 'Chưa có thẻ mới nào trong ngày hôm nay' : 'Học các thẻ mới vừa thêm'}
-                style={todaysNewCards.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-              >
-                🌱 Học từ mới hôm nay
-              </button>
-              <button
-                onClick={() => handleStartStudy('review')}
-                className="btn btn-success"
-                disabled={cardsForReview.length === 0}
-                title={cardsForReview.length === 0 ? 'Không có thẻ cần ôn hôm nay' : 'Bắt đầu học'}
-                style={cardsForReview.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-              >
-                🚀 Bắt đầu học
-              </button>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="btn btn-secondary"
-              >
-                ⚙️ Cài đặt
+              <button onClick={handleImportBackup} className="btn btn-secondary">
+                ⬆️ Nhập JSON
               </button>
             </div>
+            <input
+              type="file"
+              accept="application/json"
+              ref={backupInputRef}
+              onChange={handleBackupFileChange}
+              style={{ display: 'none' }}
+            />
+          </div>
           </div>
 
           {state.flashcards.length > 0 && (

@@ -36,6 +36,10 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     total: cards.length
   });
   const [overdueCount, setOverdueCount] = useState(0);
+  const [speechRate, setSpeechRate] = useState(0.92);
+  const [speechPitch, setSpeechPitch] = useState(1);
+  const [speechVolume, setSpeechVolume] = useState(1);
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState('');
   // Keep action history to support Undo
   const [actionHistory, setActionHistory] = useState<Array<{
     cardId: string;
@@ -122,24 +126,35 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     return selectedVoice || null;
   }, [voices]);
 
+  const resolvedVoice = useMemo<SpeechSynthesisVoice | null>(() => {
+    if (selectedVoiceUri) {
+      const matched = voices.find(voice => voice.voiceURI === selectedVoiceUri);
+      if (matched) {
+        return matched;
+      }
+    }
+    return preferredVoice;
+  }, [preferredVoice, selectedVoiceUri, voices]);
+
+
   const speakText = useCallback((text: string) => {
     if ('speechSynthesis' in window) {
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.92; // Tốc độ gốc tự nhiên
-      utterance.pitch = 1.0; // Cao độ tự nhiên
-      utterance.volume = 1.0; // Âm lượng tối đa
+      utterance.lang = resolvedVoice?.lang ?? 'en-US';
+      utterance.rate = speechRate;
+      utterance.pitch = speechPitch;
+      utterance.volume = speechVolume;
 
-      if (preferredVoice) {
-        utterance.voice = preferredVoice;
+      if (resolvedVoice) {
+        utterance.voice = resolvedVoice;
       }
 
       window.speechSynthesis.speak(utterance);
     }
-  }, [preferredVoice]);
+  }, [resolvedVoice, speechPitch, speechRate, speechVolume]);
 
   const handleFlip = useCallback(() => {
     setIsFlipped(prev => !prev);
@@ -378,6 +393,64 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
             ? 'Nhấn hoặc phím Space để xem thuật ngữ'
             : 'Nhấn hoặc phím Space để xem định nghĩa'}
        </div>
+      </div>
+
+      <div className="speech-settings" role="group" aria-label="Tùy chỉnh phát âm">
+        <div className="speech-settings__row">
+          <label htmlFor="voice-select">Giọng đọc</label>
+          <select
+            id="voice-select"
+            value={selectedVoiceUri}
+            onChange={event => setSelectedVoiceUri(event.target.value)}
+          >
+            <option value="">
+              Tự động {resolvedVoice ? `(${resolvedVoice.name})` : '(theo trình duyệt)'}
+            </option>
+            {voices.map(voice => (
+              <option key={voice.voiceURI} value={voice.voiceURI}>
+                {voice.name} - {voice.lang}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="speech-settings__inline">
+          <div className="speech-settings__row speech-settings__range">
+            <label htmlFor="speech-rate">Tốc độ: {speechRate.toFixed(2)}x</label>
+            <input
+              id="speech-rate"
+              type="range"
+              min="0.6"
+              max="1.4"
+              step="0.02"
+              value={speechRate}
+              onChange={event => setSpeechRate(Number(event.target.value))}
+            />
+          </div>
+          <div className="speech-settings__row speech-settings__range">
+            <label htmlFor="speech-pitch">Cao độ: {speechPitch.toFixed(2)}</label>
+            <input
+              id="speech-pitch"
+              type="range"
+              min="0.5"
+              max="1.5"
+              step="0.02"
+              value={speechPitch}
+              onChange={event => setSpeechPitch(Number(event.target.value))}
+            />
+          </div>
+          <div className="speech-settings__row speech-settings__range">
+            <label htmlFor="speech-volume">Âm lượng: {(speechVolume * 100).toFixed(0)}%</label>
+            <input
+              id="speech-volume"
+              type="range"
+              min="0.3"
+              max="1"
+              step="0.01"
+              value={speechVolume}
+              onChange={event => setSpeechVolume(Number(event.target.value))}
+            />
+          </div>
+        </div>
       </div>
 
       {isFlipped && (

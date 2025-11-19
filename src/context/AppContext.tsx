@@ -263,29 +263,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (supportsIndexedDB) {
-      void saveFlashcards(state.flashcards)
-        .then(() => {
-          setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
-        })
-        .catch(error => {
-          console.warn('[FlashcardApp] Không thể lưu flashcards vào IndexedDB:', error);
-          const message = error instanceof Error ? error.message : String(error);
-          setStorageErrors(prev => ({
-            ...prev,
-            flashcards: `Không thể lưu thẻ vào bộ nhớ: ${message}`
-          }));
-        });
-    } else {
-      window.localStorage.setItem('flashcards', JSON.stringify(state.flashcards));
-      setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (supportsIndexedDB) {
+        void saveFlashcards(state.flashcards)
+          .then(() => {
+            setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
+          })
+          .catch(error => {
+            console.warn('[FlashcardApp] Không thể lưu flashcards vào IndexedDB:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            setStorageErrors(prev => ({
+              ...prev,
+              flashcards: `Không thể lưu thẻ vào bộ nhớ: ${message}`
+            }));
+          });
+      } else {
+        window.localStorage.setItem('flashcards', JSON.stringify(state.flashcards));
+        setStorageErrors(prev => (prev.flashcards ? { ...prev, flashcards: null } : prev));
+      }
+    }, 1200);
 
     try {
       recordOverdueSnapshot(state.flashcards);
     } catch (error) {
       console.warn('[FlashcardApp] Không thể cập nhật lịch sử trễ hạn:', error);
     }
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [state.flashcards, supportsIndexedDB]);
 
   useEffect(() => {
@@ -293,23 +299,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    if (supportsIndexedDB) {
-      void saveStudySessions(state.studySessions)
-        .then(() => {
-          setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
-        })
-        .catch(error => {
-          console.warn('[FlashcardApp] Không thể lưu lịch sử học vào IndexedDB:', error);
-          const message = error instanceof Error ? error.message : String(error);
-          setStorageErrors(prev => ({
-            ...prev,
-            studySessions: `Không thể lưu lịch sử học: ${message}`
-          }));
-        });
-    } else {
-      window.localStorage.setItem('studySessions', JSON.stringify(state.studySessions));
-      setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
-    }
+    const timeoutId = window.setTimeout(() => {
+      if (supportsIndexedDB) {
+        void saveStudySessions(state.studySessions)
+          .then(() => {
+            setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
+          })
+          .catch(error => {
+            console.warn('[FlashcardApp] Không thể lưu lịch sử học vào IndexedDB:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            setStorageErrors(prev => ({
+              ...prev,
+              studySessions: `Không thể lưu lịch sử học: ${message}`
+            }));
+          });
+      } else {
+        window.localStorage.setItem('studySessions', JSON.stringify(state.studySessions));
+        setStorageErrors(prev => (prev.studySessions ? { ...prev, studySessions: null } : prev));
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [state.studySessions, supportsIndexedDB]);
 
   useEffect(() => {
