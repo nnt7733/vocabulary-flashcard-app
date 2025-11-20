@@ -11,7 +11,7 @@
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@types/react-window": "^1.8.5",
-    "electron-store": "^10.0.0",
+    "electron-store": "^8.1.0",
     "node-schedule": "^2.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
