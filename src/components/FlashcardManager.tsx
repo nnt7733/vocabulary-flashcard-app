@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flashcard, StudySession as StudySessionRecord } from '../types';
-import { getCardsForReview, getStudyStats, getTodayNewCards } from '../utils/spacedRepetition';
+import { getCardsForReview, getStudyStats } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
 import StudySession, { StudySessionResult } from './StudySession';
 import SessionSummary from './SessionSummary';

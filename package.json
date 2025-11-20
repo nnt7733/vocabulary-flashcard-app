@@ -71,8 +71,7 @@
         "nsis"
       ],
       "icon": "public/icon.png",
-      "signAndEditExecutable": false,
-      "signtoolOptions": null
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
