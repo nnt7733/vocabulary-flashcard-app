@@ -14,6 +14,7 @@ interface FlashcardListProps {
 
 const ITEM_HEIGHT = 180;
 const LIST_HEIGHT = 500;
+const LIST_WIDTH = 900;
 
 const LEVEL_COLORS = [
   '#ef4444',
@@ -327,6 +328,7 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
               itemSize={ITEM_HEIGHT}
               itemData={listData}
               overscanCount={4}
+              width={LIST_WIDTH}
             >
               {FlashcardRow}
             </List>

@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Flashcard } from '../types';
 import {
-  DUE_SOON_THRESHOLD_DAYS,
   LONG_OVERDUE_DAYS,
   calculateCardUrgency
 } from '../utils/overdue';
@@ -40,20 +39,12 @@ const PriorityReviewPanel: React.FC<PriorityReviewPanelProps> = ({
       };
     }
 
-    if (dueSoonCards.length > 0) {
-      return {
-        icon: '⏰',
-        title: `${dueSoonCards.length} thẻ sắp đến hạn trong ${DUE_SOON_THRESHOLD_DAYS} ngày`,
-        description: 'Ôn trước khi quá hạn để duy trì nhịp độ học tập ổn định.'
-      };
-    }
-
     return {
       icon: '🎉',
-      title: 'Tuyệt vời! Không có thẻ ưu tiên nào',
+      title: 'Tuyệt vời! Không có thẻ quá hạn',
       description: 'Tiếp tục duy trì lịch ôn tập đều đặn để giữ vững phong độ.'
     };
-  }, [dueSoonCards.length, longOverdueCards.length, overdueCards.length]);
+  }, [longOverdueCards.length, overdueCards.length]);
 
   const highlightedCards = useMemo(() => {
     return topCards.map(card => {
@@ -87,36 +78,22 @@ const PriorityReviewPanel: React.FC<PriorityReviewPanelProps> = ({
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', marginBottom: '16px' }}>
         <div style={{ fontSize: '32px' }}>{urgencyMessage.icon}</div>
         <div>
-          <h2 style={{ marginBottom: '8px', color: '#1f2937' }}>{urgencyMessage.title}</h2>
-          <p style={{ color: '#6b7280', margin: 0 }}>{urgencyMessage.description}</p>
+          <h2 style={{ marginBottom: '8px' }}>{urgencyMessage.title}</h2>
+          <p className="priority-description">{urgencyMessage.description}</p>
         </div>
       </div>
 
       {highlightedCards.length > 0 && (
-        <div style={{
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          padding: '16px',
-          marginBottom: '16px',
-          background: '#f9fafb'
-        }}>
-          <h3 style={{ marginBottom: '12px', color: '#374151' }}>Thẻ nên ôn trước</h3>
+        <div className="priority-cards-container">
+          <h3 style={{ marginBottom: '12px' }}>Thẻ nên ôn trước</h3>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
             {highlightedCards.map(card => (
               <li
                 key={card.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: 'white',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb'
-                }}
+                className="priority-card-item"
               >
-                <span style={{ fontWeight: 600, color: '#1f2937' }}>{card.term}</span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>{card.statusLabel}</span>
+                <span className="priority-card-term">{card.term}</span>
+                <span className="priority-card-status">{card.statusLabel}</span>
               </li>
             ))}
           </ul>

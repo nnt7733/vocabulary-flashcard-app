@@ -12,8 +12,8 @@ const LearningProgressTable: React.FC<LearningProgressTableProps> = ({ sessions 
   if (!sessions.length) {
     return (
       <div className="card" style={{ marginTop: '16px' }}>
-        <h2 style={{ marginBottom: '12px', color: '#1f2937' }}>📈 Bảng đánh giá tiến độ</h2>
-        <p style={{ color: '#6b7280' }}>
+        <h2 style={{ marginBottom: '12px' }}>📈 Bảng đánh giá tiến độ</h2>
+        <p className="table-description">
           Khi bạn hoàn thành các phiên học, bảng này sẽ hiển thị tiến độ theo ngày, tháng và năm để bạn dễ dàng theo dõi.
         </p>
       </div>
@@ -72,8 +72,8 @@ const LearningProgressTable: React.FC<LearningProgressTableProps> = ({ sessions 
 
   return (
     <div className="card" style={{ marginTop: '16px' }}>
-      <h2 style={{ marginBottom: '12px', color: '#1f2937' }}>📈 Bảng đánh giá tiến độ</h2>
-      <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+      <h2 style={{ marginBottom: '12px' }}>📈 Bảng đánh giá tiến độ</h2>
+      <p className="table-description" style={{ marginBottom: '16px' }}>
         Theo dõi nhanh mức độ học tập của bạn trong hôm nay, tháng này và cả năm.
       </p>
       <div className="analytics-table__wrapper">

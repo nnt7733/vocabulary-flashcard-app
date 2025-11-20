@@ -1,7 +1,9 @@
 const DB_NAME = 'vocabulary-flashcard-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const FLASHCARD_STORE = 'flashcards';
 const SESSION_STORE = 'studySessions';
+const FOLDER_STORE = 'folders';
+const SET_STORE = 'vocabularySets';
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -12,17 +14,29 @@ function openDatabase(): Promise<IDBDatabase> {
 
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
-      const db = request.result;
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion || 0;
 
       if (!db.objectStoreNames.contains(FLASHCARD_STORE)) {
         const flashcardStore = db.createObjectStore(FLASHCARD_STORE, { keyPath: 'id' });
         flashcardStore.createIndex('nextReviewDate', 'nextReviewDate');
         flashcardStore.createIndex('status', 'status');
+        flashcardStore.createIndex('setId', 'setId');
       }
 
       if (!db.objectStoreNames.contains(SESSION_STORE)) {
         db.createObjectStore(SESSION_STORE, { keyPath: 'id' });
+      }
+
+      if (oldVersion < 2) {
+        if (!db.objectStoreNames.contains(FOLDER_STORE)) {
+          db.createObjectStore(FOLDER_STORE, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(SET_STORE)) {
+          const setStore = db.createObjectStore(SET_STORE, { keyPath: 'id' });
+          setStore.createIndex('folderId', 'folderId');
+        }
       }
     };
 
@@ -88,20 +102,24 @@ function clearAndBulkPut<T extends { id: string }>(db: IDBDatabase, storeName: s
   });
 }
 
-export async function loadAppData<TFlashcard, TSession>(): Promise<{
+export async function loadAppData<TFlashcard, TSession, TFolder = any, TSet = any>(): Promise<{
   flashcards: TFlashcard[];
   studySessions: TSession[];
+  folders: TFolder[];
+  vocabularySets: TSet[];
 }> {
   const db = await openDatabase();
 
-  const [flashcards, studySessions] = await Promise.all([
+  const [flashcards, studySessions, folders, vocabularySets] = await Promise.all([
     getAllFromStore<TFlashcard>(db, FLASHCARD_STORE),
-    getAllFromStore<TSession>(db, SESSION_STORE)
+    getAllFromStore<TSession>(db, SESSION_STORE),
+    getAllFromStore<TFolder>(db, FOLDER_STORE).catch(() => [] as TFolder[]),
+    getAllFromStore<TSet>(db, SET_STORE).catch(() => [] as TSet[])
   ]);
 
   db.close();
 
-  return { flashcards, studySessions };
+  return { flashcards, studySessions, folders, vocabularySets };
 }
 
 export async function saveFlashcards<TFlashcard extends { id: string }>(flashcards: TFlashcard[]): Promise<void> {
@@ -113,6 +131,18 @@ export async function saveFlashcards<TFlashcard extends { id: string }>(flashcar
 export async function saveStudySessions<TSession extends { id: string }>(studySessions: TSession[]): Promise<void> {
   const db = await openDatabase();
   await clearAndBulkPut(db, SESSION_STORE, studySessions);
+  db.close();
+}
+
+export async function saveFolders<TFolder extends { id: string }>(folders: TFolder[]): Promise<void> {
+  const db = await openDatabase();
+  await clearAndBulkPut(db, FOLDER_STORE, folders);
+  db.close();
+}
+
+export async function saveVocabularySets<TSet extends { id: string }>(sets: TSet[]): Promise<void> {
+  const db = await openDatabase();
+  await clearAndBulkPut(db, SET_STORE, sets);
   db.close();
 }
 

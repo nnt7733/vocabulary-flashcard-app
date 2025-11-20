@@ -36,10 +36,13 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     total: cards.length
   });
   const [overdueCount, setOverdueCount] = useState(0);
-  const [speechRate, setSpeechRate] = useState(0.92);
-  const [speechPitch, setSpeechPitch] = useState(1);
-  const [speechVolume, setSpeechVolume] = useState(1);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState('');
+  // Speech settings removed from UI but kept for future use
+  const [speechRate] = useState(0.92);
+  const [speechPitch] = useState(1);
+  const [speechVolume] = useState(1);
+  const [selectedVoiceUri] = useState('');
+  const [isShuffled, setIsShuffled] = useState(false);
+  const [shuffledCards, setShuffledCards] = useState<Flashcard[]>(cards);
   // Keep action history to support Undo
   const [actionHistory, setActionHistory] = useState<Array<{
     cardId: string;
@@ -50,8 +53,30 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     wasOverdue: boolean;
   }>>([]);
 
-  const totalCards = cards.length;
-  const currentCard = cards[currentIndex];
+  const handleShuffle = useCallback(() => {
+    if (isShuffled) {
+      // Reset to original order
+      setShuffledCards(cards);
+      setIsShuffled(false);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+    } else {
+      // Shuffle the cards
+      const shuffled = [...cards];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      setShuffledCards(shuffled);
+      setIsShuffled(true);
+      setCurrentIndex(0);
+      setIsFlipped(false);
+    }
+  }, [cards, isShuffled]);
+
+  const cardsToUse = isShuffled ? shuffledCards : cards;
+  const totalCards = cardsToUse.length;
+  const currentCard = cardsToUse[currentIndex];
   const progress = totalCards > 0 ? ((currentIndex + 1) / totalCards) * 100 : 0;
   const { voices } = useAppContext();
 
@@ -66,9 +91,11 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     setSessionStats({
       correct: 0,
       incorrect: 0,
-      total: cards.length
+      total: cardsToUse.length
     });
     setOverdueCount(0);
+    setShuffledCards(cards);
+    setIsShuffled(false);
     return () => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -204,13 +231,13 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     setSessionStats(nextStats);
 
     // Move to next card
-    if (currentIndex < cards.length - 1) {
+    if (currentIndex < cardsToUse.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setIsFlipped(false);
       setStartTime(Date.now());
     } else {
       // Session finished - include the last answered card state and incorrect list
-      const finalCards = cards.map(card =>
+      const finalCards = cardsToUse.map(card =>
         nextUpdatedMap.get(card.id) || card
       );
 
@@ -337,12 +364,30 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, color: '#1f2937' }}>
-          Học từ vựng ({currentIndex + 1}/{cards.length})
+        <h2 style={{ margin: 0 }}>
+          Học từ vựng ({currentIndex + 1}/{totalCards})
         </h2>
-        <button onClick={onExit} className="btn btn-secondary">
-          Thoát
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={handleShuffle}
+            className="btn btn-secondary"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              backgroundColor: isShuffled ? 'var(--bg-tertiary)' : 'transparent',
+              border: `1px solid ${isShuffled ? 'var(--color-primary, #3b82f6)' : 'var(--border-color)'}`
+            }}
+            title={isShuffled ? 'Tắt xáo trộn' : 'Xáo trộn thẻ'}
+          >
+            <span style={{ fontSize: '18px' }}>🔀</span>
+            {isShuffled && <span style={{ fontSize: '12px' }}>Đã xáo trộn</span>}
+          </button>
+          <button onClick={onExit} className="btn btn-secondary">
+            Thoát
+          </button>
+        </div>
       </div>
 
       <div className="progress-bar">
@@ -362,12 +407,12 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
                   e.stopPropagation();
                   handleSpeak();
                 }}
+                className="speak-button"
                 style={{
                   background: 'none',
                   border: 'none',
                   fontSize: '28px',
                   cursor: 'pointer',
-                  color: '#4f46e5',
                   padding: '4px',
                   display: 'flex',
                   alignItems: 'center',
@@ -382,74 +427,10 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
             </>
           )}
         </div>
-        <div style={{ 
-          position: 'absolute', 
-          bottom: '16px', 
-          right: '16px', 
-          color: '#9ca3af',
-          fontSize: '14px'
-        }}>
+        <div className="flashcard-hint">
           {isFlipped
             ? 'Nhấn hoặc phím Space để xem thuật ngữ'
             : 'Nhấn hoặc phím Space để xem định nghĩa'}
-       </div>
-      </div>
-
-      <div className="speech-settings" role="group" aria-label="Tùy chỉnh phát âm">
-        <div className="speech-settings__row">
-          <label htmlFor="voice-select">Giọng đọc</label>
-          <select
-            id="voice-select"
-            value={selectedVoiceUri}
-            onChange={event => setSelectedVoiceUri(event.target.value)}
-          >
-            <option value="">
-              Tự động {resolvedVoice ? `(${resolvedVoice.name})` : '(theo trình duyệt)'}
-            </option>
-            {voices.map(voice => (
-              <option key={voice.voiceURI} value={voice.voiceURI}>
-                {voice.name} - {voice.lang}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="speech-settings__inline">
-          <div className="speech-settings__row speech-settings__range">
-            <label htmlFor="speech-rate">Tốc độ: {speechRate.toFixed(2)}x</label>
-            <input
-              id="speech-rate"
-              type="range"
-              min="0.6"
-              max="1.4"
-              step="0.02"
-              value={speechRate}
-              onChange={event => setSpeechRate(Number(event.target.value))}
-            />
-          </div>
-          <div className="speech-settings__row speech-settings__range">
-            <label htmlFor="speech-pitch">Cao độ: {speechPitch.toFixed(2)}</label>
-            <input
-              id="speech-pitch"
-              type="range"
-              min="0.5"
-              max="1.5"
-              step="0.02"
-              value={speechPitch}
-              onChange={event => setSpeechPitch(Number(event.target.value))}
-            />
-          </div>
-          <div className="speech-settings__row speech-settings__range">
-            <label htmlFor="speech-volume">Âm lượng: {(speechVolume * 100).toFixed(0)}%</label>
-            <input
-              id="speech-volume"
-              type="range"
-              min="0.3"
-              max="1"
-              step="0.01"
-              value={speechVolume}
-              onChange={event => setSpeechVolume(Number(event.target.value))}
-            />
-          </div>
         </div>
       </div>
 

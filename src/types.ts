@@ -8,6 +8,24 @@ export interface Flashcard {
   nextReviewDate: Date;
   isNew: boolean;
   status?: 'active' | 'learned';
+  setId: string; // Reference to vocabulary set
+}
+
+export interface VocabularySet {
+  id: string;
+  name: string;
+  folderId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  wordCount: number;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+  setCount: number;
 }
 
 export interface Repetition {
@@ -29,10 +47,15 @@ export interface StudySession {
 export interface AppState {
   flashcards: Flashcard[];
   studySessions: StudySession[];
+  folders: Folder[];
+  vocabularySets: VocabularySet[];
   currentCardIndex: number;
   isFlipped: boolean;
   isStudying: boolean;
   showImportForm: boolean;
+  selectedFolderId: string | null;
+  selectedSetId: string | null;
+  studyMode: 'set' | 'quick' | null; // 'set' = study by set, 'quick' = quick study all sets
 }
 
 // Spaced repetition schedule based on the image

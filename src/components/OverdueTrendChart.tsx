@@ -63,8 +63,8 @@ const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ sessions }) => {
   if (!chartData.length) {
     return (
       <div className="card" style={{ marginTop: '16px', textAlign: 'left' }}>
-        <h2 style={{ marginBottom: '12px', color: '#1f2937' }}>📊 Xu hướng thẻ trễ hạn</h2>
-        <p style={{ color: '#6b7280' }}>
+        <h2 style={{ marginBottom: '12px' }}>📊 Xu hướng thẻ trễ hạn</h2>
+        <p className="chart-description">
           Khi bạn học và cập nhật thẻ mỗi ngày, biểu đồ này sẽ hiển thị xu hướng số lượng thẻ trễ hạn trong 2 tuần gần nhất.
           {' '}
           {totalSessions > 0
@@ -79,8 +79,8 @@ const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ sessions }) => {
     <div className="card" style={{ marginTop: '16px', textAlign: 'left' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <div>
-          <h2 style={{ marginBottom: '4px', color: '#1f2937' }}>📊 Xu hướng thẻ trễ hạn</h2>
-          <p style={{ color: '#6b7280', margin: 0 }}>
+          <h2 style={{ marginBottom: '4px' }}>📊 Xu hướng thẻ trễ hạn</h2>
+          <p className="chart-description" style={{ margin: 0 }}>
             Cập nhật hàng ngày. Hiện có <strong>{currentCount}</strong> thẻ đang quá hạn.
           </p>
         </div>
@@ -123,7 +123,7 @@ const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ sessions }) => {
                   y={CHART_HEIGHT - 2}
                   textAnchor="middle"
                   fontSize="10"
-                  fill="#6b7280"
+                  style={{ fill: 'var(--text-secondary)' }}
                 >
                   {labels[index]}
                 </text>
@@ -132,7 +132,7 @@ const OverdueTrendChart: React.FC<OverdueTrendChartProps> = ({ sessions }) => {
                   y={y - 10}
                   textAnchor="middle"
                   fontSize="10"
-                  fill="#374151"
+                  style={{ fill: 'var(--text-primary)' }}
                 >
                   {point.count}
                 </text>

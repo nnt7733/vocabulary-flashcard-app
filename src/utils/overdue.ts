@@ -20,6 +20,20 @@ export interface OverdueSnapshot {
 }
 
 export function calculateCardUrgency(card: Flashcard, now: Date = new Date()): CardUrgency {
+  // Từ mới (level 0, chưa học lần nào) không bao giờ bị coi là trễ hạn
+  const isNewCard = card.currentLevel === 0 && card.repetitions.length === 0;
+  
+  if (isNewCard) {
+    return {
+      isOverdue: false,
+      isLongOverdue: false,
+      overdueDays: 0,
+      isDueSoon: false,
+      daysUntilDue: 0,
+      urgencyScore: 0
+    };
+  }
+
   const nextReview = card.nextReviewDate instanceof Date
     ? card.nextReviewDate
     : new Date(card.nextReviewDate);
@@ -77,6 +91,11 @@ export function sortCardsByUrgency(cards: Flashcard[], now: Date = new Date()): 
 export function getOverdueCards(cards: Flashcard[], now: Date = new Date()): Flashcard[] {
   return cards.filter(card => {
     if (card.status === 'learned') {
+      return false;
+    }
+    // Từ mới (level 0, chưa học lần nào) không bao giờ bị coi là trễ hạn
+    const isNewCard = card.currentLevel === 0 && card.repetitions.length === 0;
+    if (isNewCard) {
       return false;
     }
     const urgency = calculateCardUrgency(card, now);
@@ -157,6 +176,12 @@ export function applyOverduePenalty(cards: Flashcard[], now: Date = new Date()):
   const nowTime = now.getTime();
 
   return cards.map(card => {
+    // Từ mới (level 0, chưa học lần nào) không bị phạt
+    const isNewCard = card.currentLevel === 0 && card.repetitions.length === 0;
+    if (isNewCard) {
+      return card;
+    }
+
     const nextReviewDate = card.nextReviewDate instanceof Date
       ? card.nextReviewDate
       : new Date(card.nextReviewDate);
@@ -168,16 +193,22 @@ export function applyOverduePenalty(cards: Flashcard[], now: Date = new Date()):
 
     const overdueDays = Math.floor((nowTime - nextReviewTime) / MS_PER_DAY);
 
+    // Trễ ít hơn 3 ngày: không phạt
     if (overdueDays < 3) {
       return card;
     }
 
-    const penaltyLevels = Math.floor(overdueDays / 3);
-    if (penaltyLevels <= 0) {
-      return card;
+    // Trễ 7 ngày trở lên: reset về cấp 0
+    if (overdueDays >= 7) {
+      return {
+        ...card,
+        currentLevel: 0,
+        status: 'active'
+      };
     }
 
-    const downgradedLevel = Math.max(0, card.currentLevel - penaltyLevels);
+    // Trễ 3-6 ngày: hạ 1 cấp
+    const downgradedLevel = Math.max(0, card.currentLevel - 1);
 
     if (downgradedLevel === card.currentLevel) {
       return card;

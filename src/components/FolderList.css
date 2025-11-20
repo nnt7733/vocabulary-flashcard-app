@@ -1,0 +1,146 @@
+.folder-list-container {
+  margin-bottom: 24px;
+}
+
+.folder-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.folder-list-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.folder-item {
+  margin-bottom: 12px;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.folder-header:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+
+.folder-header.expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+
+.folder-icon {
+  font-size: 20px;
+}
+
+.folder-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.folder-header input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.folder-count {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 16px;
+  transition: background 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: var(--bg-tertiary);
+}
+
+.sets-container {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 8px;
+}
+
+.set-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.set-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.set-item.selected {
+  background: var(--bg-tertiary);
+  border-color: #0e639c;
+  border-width: 2px;
+}
+
+.set-icon {
+  font-size: 18px;
+}
+
+.set-name {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.set-item input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.set-count {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.set-actions {
+  display: flex;
+  gap: 4px;
+}
+

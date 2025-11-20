@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTheme } from '../context/ThemeContext';
 
 type ReminderSettings = {
   enabled: boolean;
@@ -50,6 +51,7 @@ const parseTime = (value: string): { hour: number; minute: number } => {
 };
 
 const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
+  const { toggleTheme, isDark } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -173,11 +175,11 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
           marginBottom: '24px'
         }}
       >
-        <h2 style={{ margin: 0, color: '#1f2937' }}>Cài đặt</h2>
+        <h2 style={{ margin: 0 }}>Cài đặt</h2>
         <button
           type="button"
           onClick={onClose}
-          style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6b7280' }}
+          className="settings-close-btn"
           aria-label="Đóng cài đặt"
         >
           ×
@@ -185,28 +187,48 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
       </div>
 
       {error && (
-        <div style={{ color: 'red', marginBottom: '16px' }} role="alert">
+        <div className="settings-error" role="alert">
           {error}
         </div>
       )}
 
       {statusMessage && (
-        <div style={{ color: '#047857', marginBottom: '16px' }}>
+        <div className="settings-success">
           {statusMessage}
         </div>
       )}
+
+      <div className="input-group">
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <span>Giao diện:</span>
+        </label>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="btn btn-secondary"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', width: 'auto' }}
+          aria-label={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+        >
+          <span style={{ fontSize: '20px' }}>
+            {isDark ? '☀️' : '🌙'}
+          </span>
+          <span>{isDark ? 'Sáng' : 'Tối'}</span>
+        </button>
+      </div>
+
+      <hr className="settings-divider" />
 
       <div className="input-group">
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <input type="checkbox" checked={openAtLogin} onChange={handleOpenAtLoginChange} style={{ width: 'auto' }} />
           Mở ứng dụng khi khởi động máy tính
         </label>
-        <div style={{ fontSize: '12px', color: '#6b7280', marginLeft: '24px', marginTop: '4px' }}>
+        <div className="settings-note">
           Lưu ý: Tùy chọn này chỉ hoạt động khi ứng dụng được đóng gói (!isDev).
         </div>
       </div>
 
-      <hr style={{ margin: '24px 0', borderColor: '#e5e7eb' }} />
+      <hr className="settings-divider" />
 
       <div className="input-group">
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

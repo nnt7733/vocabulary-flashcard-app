@@ -137,22 +137,16 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   return (
     <div className="import-section">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ margin: 0, color: '#1f2937' }}>Nhập dữ liệu</h2>
+        <h2 style={{ margin: 0 }}>Nhập dữ liệu</h2>
         <button
           onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '24px',
-            cursor: 'pointer',
-            color: '#6b7280'
-          }}
+          className="import-close-btn"
         >
           ×
         </button>
       </div>
 
-      <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+      <p className="import-description">
         Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.). Mỗi dòng nên có định dạng:
         <br />
         <strong>Từ</strong> [delimiter] <strong>Định nghĩa</strong>
@@ -169,7 +163,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       </div>
 
       {parseError && (
-        <div style={{ color: '#b45309', background: '#fef3c7', borderRadius: '6px', padding: '12px', marginBottom: '16px', textAlign: 'left' }}>
+        <div className="import-error">
           {parseError}
         </div>
       )}
@@ -284,7 +278,7 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
               </div>
             ))}
             {previewCards.length > 3 && (
-              <div style={{ color: '#9ca3af', fontStyle: 'italic' }}>
+              <div className="import-preview-more">
                 ... và {previewCards.length - 3} thẻ khác
               </div>
             )}

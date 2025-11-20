@@ -1,21 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Flashcard, StudySession } from '../types';
+import { Flashcard, StudySession as StudySessionRecord } from '../types';
 import { getCardsForReview, getStudyStats, getTodayNewCards } from '../utils/spacedRepetition';
 import ImportForm from './ImportForm';
 import StudySession, { StudySessionResult } from './StudySession';
 import SessionSummary from './SessionSummary';
 import FlashcardList from './FlashcardList';
 import { useAppContext } from '../context/AppContext';
-import LearningProgressTable from './LearningProgressTable';
 import {
   getDueSoonCards,
   getLongOverdueCards,
   getOverdueCards,
-  sortCardsByUrgency
+  sortCardsByUrgency,
+  calculateCardUrgency
 } from '../utils/overdue';
 import PriorityReviewPanel from './PriorityReviewPanel';
-import OverdueTrendChart from './OverdueTrendChart';
 import SettingsForm from './SettingsForm';
+import FolderList from './FolderList';
+import './FolderList.css';
 
 const FlashcardManager: React.FC = () => {
   const { state, dispatch, storageError, clearStorageError } = useAppContext();
@@ -52,9 +53,17 @@ const FlashcardManager: React.FC = () => {
     };
   }, [uiMessage]);
 
+  // Get flashcards based on selected set or all sets
+  const filteredFlashcards = useMemo(() => {
+    if (state.selectedSetId) {
+      return state.flashcards.filter(card => card.setId === state.selectedSetId);
+    }
+    return state.flashcards;
+  }, [state.flashcards, state.selectedSetId]);
+
   const activeFlashcards = useMemo(
-    () => state.flashcards.filter(card => card.status !== 'learned'),
-    [state.flashcards]
+    () => filteredFlashcards.filter(card => card.status !== 'learned'),
+    [filteredFlashcards]
   );
 
   const learnedFlashcards = useMemo(
@@ -66,12 +75,9 @@ const FlashcardManager: React.FC = () => {
   const overdueCards = useMemo(() => getOverdueCards(activeFlashcards), [activeFlashcards]);
   const longOverdueCards = useMemo(() => getLongOverdueCards(activeFlashcards), [activeFlashcards]);
   const dueSoonCards = useMemo(() => getDueSoonCards(activeFlashcards), [activeFlashcards]);
+  // Cards for review excluding new cards today (for stats display)
   const cardsForReview = useMemo(
     () => sortCardsByUrgency(getCardsForReview(activeFlashcards, { excludeNewToday: true })),
-    [activeFlashcards]
-  );
-  const todaysNewCards = useMemo(
-    () => getTodayNewCards(activeFlashcards),
     [activeFlashcards]
   );
   const priorityCards = useMemo(() => {
@@ -87,33 +93,117 @@ const FlashcardManager: React.FC = () => {
 
   const handleImport = (cards: { term: string; definition: string }[]) => {
     if (!cards.length) return;
-    dispatch({ type: 'IMPORT_FLASHCARDS', payload: { cards } });
+    if (!state.selectedSetId) {
+      setUiMessage({
+        type: 'warning',
+        text: 'Vui lòng chọn một set để thêm từ vựng!'
+      });
+      return;
+    }
+    dispatch({ type: 'IMPORT_FLASHCARDS', payload: { cards, setId: state.selectedSetId } });
+    setUiMessage({
+      type: 'success',
+      text: `Đã thêm ${cards.length} từ vựng vào set!`
+    });
   };
 
-  const handleStartStudy = (mode: 'review' | 'newToday') => {
-    const cardsToStudy = mode === 'review'
-      ? cardsForReview
-      : todaysNewCards;
+  // Quick Study: Get all active cards, sorted by urgency then oldest first
+  const getQuickStudyCards = useMemo(() => {
+    const allActiveCards = state.flashcards.filter(card => card.status !== 'learned');
+    
+    if (allActiveCards.length === 0) {
+      return [];
+    }
+
+    // Prioritize by urgency, then oldest first
+    let cardsForReview = getCardsForReview(allActiveCards, { excludeNewToday: true });
+    
+    // If no cards available, include all cards
+    if (cardsForReview.length === 0) {
+      cardsForReview = allActiveCards;
+    }
+    
+    // Sort by urgency first (for spaced repetition optimization), then by oldest first
+    return [...cardsForReview].sort((a, b) => {
+      const urgencyA = calculateCardUrgency(a);
+      const urgencyB = calculateCardUrgency(b);
+      
+      // First priority: urgency score (higher = more urgent)
+      if (urgencyA.urgencyScore !== urgencyB.urgencyScore) {
+        return urgencyB.urgencyScore - urgencyA.urgencyScore;
+      }
+      
+      // Second priority: next review date (earlier = more urgent)
+      const nextReviewA = a.nextReviewDate instanceof Date ? a.nextReviewDate : new Date(a.nextReviewDate);
+      const nextReviewB = b.nextReviewDate instanceof Date ? b.nextReviewDate : new Date(b.nextReviewDate);
+      if (nextReviewA.getTime() !== nextReviewB.getTime()) {
+        return nextReviewA.getTime() - nextReviewB.getTime();
+      }
+      
+      // Third priority: oldest words first (for Quick Study requirement)
+      if (a.createdAt.getTime() !== b.createdAt.getTime()) {
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      }
+      
+      // Final tiebreaker: alphabetically
+      return a.term.localeCompare(b.term);
+    });
+  }, [state.flashcards]);
+
+  const handleStartStudy = (mode: 'set' | 'quick') => {
+    let cardsToStudy: Flashcard[] = [];
+
+    if (mode === 'set') {
+      if (!state.selectedSetId) {
+        setUiMessage({
+          type: 'warning',
+          text: 'Vui lòng chọn một set để học!'
+        });
+        return;
+      }
+      // Always allow studying a set - get all active cards in the set
+      cardsToStudy = filteredFlashcards.filter(card => card.status !== 'learned');
+    } else {
+      // Quick Study mode - get all active cards (with optional shuffle)
+      cardsToStudy = getQuickStudyCards;
+    }
 
     if (cardsToStudy.length === 0) {
       setUiMessage({
         type: 'info',
-        text: mode === 'review'
-          ? 'Không có thẻ nào cần ôn tập vào lúc này. Hãy quay lại sau hoặc thêm thẻ mới để tiếp tục tiến độ!'
-          : 'Hôm nay bạn chưa thêm thẻ mới nào để học. Thêm vài thẻ mới để bắt đầu phiên học nhé!'
+        text: mode === 'set'
+          ? 'Không có thẻ nào trong set này. Hãy thêm thẻ mới!'
+          : 'Không có thẻ nào để học. Hãy thêm thẻ mới vào các set!'
       });
       return;
     }
 
     setUiMessage(null);
     setCurrentSessionCards(cardsToStudy);
-    dispatch({ type: 'START_STUDY' });
+    dispatch({ 
+      type: 'START_STUDY', 
+      payload: { 
+        mode, 
+        setId: mode === 'set' ? (state.selectedSetId ?? undefined) : undefined 
+      } 
+    });
   };
 
   const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt, overdueReviewed }: StudySessionResult) => {
     const updatedFlashcards = state.flashcards.map(card => {
       const updated = updatedCards.find(uc => uc.id === card.id);
       return updated || card;
+    });
+
+    // Update word counts for all sets
+    const updatedSets = state.vocabularySets.map(set => {
+      const wordCount = updatedFlashcards.filter(c => c.setId === set.id && c.status !== 'learned').length;
+      return { ...set, wordCount, updatedAt: new Date() };
+    });
+
+    // Update sets first
+    updatedSets.forEach(set => {
+      dispatch({ type: 'UPDATE_VOCABULARY_SET', payload: set });
     });
 
     dispatch({ type: 'COMPLETE_STUDY', payload: { updatedCards: updatedFlashcards } });
@@ -169,10 +259,12 @@ const FlashcardManager: React.FC = () => {
 
   const handleUpdateCard = (updatedCard: Flashcard) => {
     dispatch({ type: 'UPDATE_FLASHCARD', payload: updatedCard });
+    // Word count will be updated automatically in reducer
   };
 
   const handleDeleteCard = (cardId: string) => {
     dispatch({ type: 'DELETE_FLASHCARD', payload: cardId });
+    // Word count will be updated automatically in reducer
   };
 
   const handleDeleteAllCards = () => {
@@ -184,27 +276,58 @@ const FlashcardManager: React.FC = () => {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
-  const reviveFlashcardFromBackup = (card: any): Flashcard => ({
-    id: typeof card?.id === 'string' ? card.id : generateId(),
-    term: typeof card?.term === 'string' ? card.term : '',
-    definition: typeof card?.definition === 'string' ? card.definition : '',
-    createdAt: card?.createdAt ? new Date(card.createdAt) : new Date(),
-    repetitions: Array.isArray(card?.repetitions)
-      ? card.repetitions.map((rep: any) => ({
-          ...rep,
-          level: typeof rep?.level === 'number' ? rep.level : 0,
-          date: rep?.date ? new Date(rep.date) : new Date(),
-          correct: Boolean(rep?.correct),
-          responseTime: typeof rep?.responseTime === 'number' ? rep.responseTime : 0
-        }))
-      : [],
-    currentLevel: typeof card?.currentLevel === 'number' ? card.currentLevel : 0,
-    nextReviewDate: card?.nextReviewDate ? new Date(card.nextReviewDate) : new Date(),
-    isNew: Boolean(card?.isNew),
-    status: card?.status === 'learned' ? 'learned' : 'active'
-  });
+  const reviveFlashcardFromBackup = (card: any): Flashcard => {
+    // If no setId, assign to first set or create a default set
+    let setId = card?.setId;
+    if (!setId && state.vocabularySets.length > 0) {
+      setId = state.vocabularySets[0].id;
+    } else if (!setId && state.folders.length === 0) {
+      // Create a default folder and set for migration
+      const defaultFolder = {
+        id: generateId(),
+        name: 'Default Folder',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        setCount: 1
+      };
+      
+      const defaultSet = {
+        id: generateId(),
+        name: 'Default Set',
+        folderId: defaultFolder.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        wordCount: 0
+      };
+      
+      dispatch({ type: 'CREATE_FOLDER', payload: defaultFolder });
+      dispatch({ type: 'CREATE_VOCABULARY_SET', payload: defaultSet });
+      setId = defaultSet.id;
+    }
 
-  const reviveSessionFromBackup = (session: any): StudySession => ({
+    return {
+      id: typeof card?.id === 'string' ? card.id : generateId(),
+      term: typeof card?.term === 'string' ? card.term : '',
+      definition: typeof card?.definition === 'string' ? card.definition : '',
+      createdAt: card?.createdAt ? new Date(card.createdAt) : new Date(),
+      repetitions: Array.isArray(card?.repetitions)
+        ? card.repetitions.map((rep: any) => ({
+            ...rep,
+            level: typeof rep?.level === 'number' ? rep.level : 0,
+            date: rep?.date ? new Date(rep.date) : new Date(),
+            correct: Boolean(rep?.correct),
+            responseTime: typeof rep?.responseTime === 'number' ? rep.responseTime : 0
+          }))
+        : [],
+      currentLevel: typeof card?.currentLevel === 'number' ? card.currentLevel : 0,
+      nextReviewDate: card?.nextReviewDate ? new Date(card.nextReviewDate) : new Date(),
+      isNew: Boolean(card?.isNew),
+      status: card?.status === 'learned' ? 'learned' : 'active',
+      setId: setId || ''
+    };
+  };
+
+  const reviveSessionFromBackup = (session: any): StudySessionRecord => ({
     id: typeof session?.id === 'string' ? session.id : generateId(),
     date: session?.date ? new Date(session.date) : new Date(),
     cardsStudied: typeof session?.cardsStudied === 'number' ? session.cardsStudied : 0,
@@ -262,7 +385,7 @@ const FlashcardManager: React.FC = () => {
         const restoredFlashcards = Array.isArray((raw as any).flashcards)
           ? (raw as any).flashcards
               .map((card: any) => reviveFlashcardFromBackup(card))
-              .filter(card => Boolean(card.term) && Boolean(card.definition))
+              .filter((card: Flashcard) => Boolean(card.term) && Boolean(card.definition))
           : [];
         const restoredSessions = Array.isArray((raw as any).studySessions)
           ? (raw as any).studySessions.map((session: any) => reviveSessionFromBackup(session))
@@ -371,7 +494,7 @@ const FlashcardManager: React.FC = () => {
         {storageBanner}
         {notificationBanner}
         <FlashcardList
-          flashcards={state.flashcards}
+          flashcards={filteredFlashcards}
           onUpdateCard={handleUpdateCard}
           onDeleteCard={handleDeleteCard}
           onDeleteAll={handleDeleteAllCards}
@@ -423,6 +546,65 @@ const FlashcardManager: React.FC = () => {
         />
       ) : (
         <>
+          <FolderList
+            folders={state.folders}
+            sets={state.vocabularySets}
+            onSelectFolder={(folderId) => dispatch({ type: 'SET_SELECTED_FOLDER', payload: folderId || null })}
+            onSelectSet={(setId) => dispatch({ type: 'SET_SELECTED_SET', payload: setId || null })}
+            selectedFolderId={state.selectedFolderId}
+            selectedSetId={state.selectedSetId}
+            onShowImportForm={() => {
+              if (!state.selectedSetId) {
+                setUiMessage({
+                  type: 'warning',
+                  text: 'Vui lòng chọn một set để thêm từ vựng!'
+                });
+                return;
+              }
+              dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true });
+            }}
+          />
+
+          <div className="card">
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <h2 style={{ marginBottom: '16px' }}>
+                🚀 Quick Study - Học tất cả sets
+              </h2>
+              <p className="study-ready-text">
+                {state.flashcards.filter(c => c.status !== 'learned').length > 0
+                  ? `Bạn có ${state.flashcards.filter(c => c.status !== 'learned').length} thẻ từ tất cả sets`
+                  : 'Không có thẻ nào để học'}
+              </p>
+            </div>
+            <div className="controls" style={{ justifyContent: 'center' }}>
+              <button
+                onClick={() => handleStartStudy('quick')}
+                className="btn btn-success"
+                disabled={state.flashcards.filter(c => c.status !== 'learned').length === 0}
+                title="Quick Study - Học từ cũ nhất từ tất cả sets"
+              >
+                🚀 Quick Study
+              </button>
+              <button
+                onClick={() => setShowSettings(true)}
+                className="btn btn-secondary"
+              >
+                ⚙️ Cài đặt
+              </button>
+            </div>
+          </div>
+
+          {(overdueCards.length > 0 || longOverdueCards.length > 0) && (
+            <PriorityReviewPanel
+              overdueCards={overdueCards}
+              longOverdueCards={longOverdueCards}
+              dueSoonCards={[]}
+              topCards={priorityCards}
+              onStartReview={() => handleStartStudy('quick')}
+              onOpenFlashcardList={() => setShowFlashcardList(true)}
+            />
+          )}
+
           <div className="stats">
             <div className="stat-card">
               <div className="stat-number">{stats.total}</div>
@@ -433,14 +615,10 @@ const FlashcardManager: React.FC = () => {
               <div className="stat-label">Thẻ mới</div>
             </div>
             <div className="stat-card">
-              <div className="stat-number">{stats.newToday}</div>
-              <div className="stat-label">Mới hôm nay</div>
-            </div>
-            <div className="stat-card">
               <div className="stat-number">{stats.due}</div>
               <div className="stat-label">Cần ôn tập</div>
             </div>
-          <div className="stat-card">
+            <div className="stat-card">
               <div className="stat-number">{state.studySessions.length}</div>
               <div className="stat-label">Phiên học</div>
             </div>
@@ -450,75 +628,45 @@ const FlashcardManager: React.FC = () => {
             </div>
           </div>
 
-          <OverdueTrendChart sessions={state.studySessions} />
+          {state.selectedSetId && (
+            <div className="card">
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <h2 style={{ marginBottom: '16px' }}>
+                  📚 Học Set: {state.vocabularySets.find(s => s.id === state.selectedSetId)?.name || 'Unknown'}
+                </h2>
+                <p className="study-ready-text">
+                  {filteredFlashcards.filter(c => c.status !== 'learned').length > 0
+                    ? `Bạn có ${filteredFlashcards.filter(c => c.status !== 'learned').length} thẻ trong set này`
+                    : 'Không có thẻ nào trong set này'}
+                </p>
+              </div>
 
-          <PriorityReviewPanel
-            overdueCards={overdueCards}
-            longOverdueCards={longOverdueCards}
-            dueSoonCards={dueSoonCards}
-            topCards={priorityCards}
-            onStartReview={() => handleStartStudy('review')}
-            onOpenFlashcardList={() => setShowFlashcardList(true)}
-          />
-
-          <LearningProgressTable sessions={state.studySessions} />
-
-          <div className="card">
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '16px', color: '#1f2937' }}>
-                Sẵn sàng học tập?
-              </h2>
-              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-                {cardsForReview.length > 0
-                  ? `Bạn có ${cardsForReview.length} thẻ cần ôn tập`
-                  : 'Tuyệt vời! Bạn đã hoàn thành tất cả thẻ cần ôn tập hôm nay.'}
-              </p>
-              <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-                {todaysNewCards.length > 0
-                  ? `Hôm nay có ${todaysNewCards.length} thẻ mới chờ bạn khám phá.`
-                  : 'Bạn chưa thêm thẻ mới nào trong ngày hôm nay.'}
-              </p>
+              <div className="controls">
+                <button
+                  onClick={() => setShowFlashcardList(true)}
+                  className="btn btn-secondary"
+                  disabled={filteredFlashcards.length === 0}
+                >
+                  📝 Quản lý từ vựng
+                </button>
+                <button
+                  onClick={() => handleStartStudy('set')}
+                  className="btn btn-success"
+                  disabled={filteredFlashcards.filter(c => c.status !== 'learned').length === 0}
+                  title="Học set đã chọn"
+                >
+                  📚 Học Set này
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="btn btn-secondary"
+                >
+                  ⚙️ Cài đặt
+                </button>
+              </div>
             </div>
+          )}
 
-          <div className="controls">
-            <button
-              onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
-              className="btn btn-primary"
-            >
-              ➕ Thêm từ mới
-            </button>
-            <button
-              onClick={() => setShowFlashcardList(true)}
-              className="btn btn-secondary"
-              disabled={state.flashcards.length === 0}
-            >
-              📝 Quản lý từ vựng
-            </button>
-            <button
-              onClick={() => handleStartStudy('newToday')}
-              className="btn btn-secondary"
-              disabled={todaysNewCards.length === 0}
-              title={todaysNewCards.length === 0 ? 'Chưa có thẻ mới nào trong ngày hôm nay' : 'Học các thẻ mới vừa thêm'}
-              style={todaysNewCards.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-            >
-              🌱 Học từ mới hôm nay
-            </button>
-            <button
-              onClick={() => handleStartStudy('review')}
-              className="btn btn-success"
-              disabled={cardsForReview.length === 0}
-              title={cardsForReview.length === 0 ? 'Không có thẻ cần ôn hôm nay' : 'Bắt đầu học'}
-              style={cardsForReview.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
-            >
-              🚀 Bắt đầu học
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="btn btn-secondary"
-            >
-              ⚙️ Cài đặt
-            </button>
-          </div>
 
           <div className="backup-controls">
             <p>📦 Sao lưu dữ liệu định kỳ để tránh mất mát.</p>
@@ -538,26 +686,21 @@ const FlashcardManager: React.FC = () => {
               style={{ display: 'none' }}
             />
           </div>
-          </div>
 
           {state.flashcards.length > 0 && (
             <div className="card">
-              <h3 style={{ marginBottom: '16px', color: '#1f2937' }}>
+              <h3 style={{ marginBottom: '16px' }}>
                 Thống kê theo cấp độ
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
                 {Object.entries(stats.byLevel).map(([level, count]) => (
-                  <div key={level} style={{ 
-                    background: '#f9fafb', 
-                    padding: '12px', 
-                    borderRadius: '8px', 
-                    textAlign: 'center',
-                    border: level === '0' ? '2px solid #4f46e5' : '1px solid #e5e7eb'
+                  <div key={level} className="level-stat-card" style={{ 
+                    border: level === '0' ? '2px solid #4ec9b0' : '1px solid var(--border-color)'
                   }}>
-                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#4f46e5' }}>
+                    <div className="level-stat-number">
                       {count}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                    <div className="level-stat-label">
                       Cấp {level}
                     </div>
                   </div>
@@ -566,20 +709,6 @@ const FlashcardManager: React.FC = () => {
             </div>
           )}
 
-          {state.flashcards.length === 0 && (
-            <div className="card">
-              <div className="empty-state">
-                <h3>Chưa có thẻ nào</h3>
-                <p>Hãy thêm một số từ vựng mới để bắt đầu học tập!</p>
-                <button
-                  onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
-                  className="btn btn-primary"
-                >
-                  Thêm từ mới
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
