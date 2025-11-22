@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { useAppContext } from '../context/AppContext';
+import './SettingsForm.css';
 
 type ReminderSettings = {
   enabled: boolean;
@@ -26,6 +28,12 @@ declare global {
       setReminder: (
         settings: ReminderSettings
       ) => Promise<{ success: boolean; error?: string } | void>;
+      fetchQuizlet: (url: string) => Promise<{
+        success: boolean;
+        terms?: { term: string; definition: string }[];
+        count?: number;
+        error?: string;
+      }>;
     };
   }
 }
@@ -52,19 +60,30 @@ const parseTime = (value: string): { hour: number; minute: number } => {
 
 const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
   const { toggleTheme, isDark } = useTheme();
+  const { voices } = useAppContext();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [openAtLogin, setOpenAtLoginState] = useState(false);
   const [reminder, setReminderState] = useState<ReminderSettings>(DEFAULT_REMINDER);
+  
+  // TTS Settings
+  const [selectedVoice, setSelectedVoice] = useState<string>('');
+  const [speechRate, setSpeechRate] = useState<number>(1.0);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadSettings = async () => {
+      // Load TTS settings from localStorage
+      const savedVoice = localStorage.getItem('tts_voice');
+      const savedRate = localStorage.getItem('tts_rate');
+      
+      if (savedVoice) setSelectedVoice(savedVoice);
+      if (savedRate) setSpeechRate(parseFloat(savedRate));
+
       if (!window.electronAPI) {
         if (isMounted) {
-          setError('Tính năng cài đặt chỉ khả dụng trong ứng dụng desktop.');
           setIsLoading(false);
         }
         return;
@@ -161,107 +180,207 @@ const SettingsForm: React.FC<SettingsFormProps> = ({ onClose }) => {
     }
   };
 
+  const handleVoiceChange = (voiceName: string) => {
+    setSelectedVoice(voiceName);
+    localStorage.setItem('tts_voice', voiceName);
+    setStatusMessage('Voice preference saved');
+  };
+
+  const handleRateChange = (rate: number) => {
+    setSpeechRate(rate);
+    localStorage.setItem('tts_rate', rate.toString());
+  };
+
+  const handleTestSpeech = () => {
+    if (!('speechSynthesis' in window)) {
+      setError('Text-to-speech is not supported in your browser.');
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance('Hello, this is a test of the text to speech system.');
+    
+    if (selectedVoice) {
+      const voice = voices.find(v => v.name === selectedVoice);
+      if (voice) utterance.voice = voice;
+    }
+    
+    utterance.rate = speechRate;
+    
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+  };
+
   if (isLoading) {
-    return <div className="card">Đang tải cài đặt...</div>;
+    return (
+      <div className="settings-modal-overlay" onClick={onClose}>
+        <div className="settings-modal glass-card" onClick={(e) => e.stopPropagation()}>
+          <div className="settings-loading">Đang tải cài đặt...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="card">
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '24px'
-        }}
-      >
-        <h2 style={{ margin: 0 }}>Cài đặt</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="settings-close-btn"
-          aria-label="Đóng cài đặt"
-        >
-          ×
-        </button>
-      </div>
-
-      {error && (
-        <div className="settings-error" role="alert">
-          {error}
+    <div className="settings-modal-overlay" onClick={onClose}>
+      <div className="settings-modal glass-card" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-header">
+          <h2>⚙️ Settings</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="settings-close-btn"
+            aria-label="Close settings"
+          >
+            ×
+          </button>
         </div>
-      )}
 
-      {statusMessage && (
-        <div className="settings-success">
-          {statusMessage}
+        <div className="settings-content">
+          {error && (
+            <div className="settings-error" role="alert">
+              {error}
+            </div>
+          )}
+
+          {statusMessage && (
+            <div className="settings-success">
+              {statusMessage}
+            </div>
+          )}
+
+          {/* Text-to-Speech Settings */}
+          <div className="settings-section">
+            <h3>🔊 Text-to-Speech</h3>
+            
+            <div className="settings-field">
+              <label htmlFor="voice-select">Voice</label>
+              <select
+                id="voice-select"
+                value={selectedVoice}
+                onChange={(e) => handleVoiceChange(e.target.value)}
+                className="settings-select"
+              >
+                <option value="">Default Voice</option>
+                {voices
+                  .filter(voice => voice.lang.startsWith('en'))
+                  .map(voice => (
+                    <option key={voice.name} value={voice.name}>
+                      {voice.name} ({voice.lang})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="settings-field">
+              <label htmlFor="speed-slider">
+                Reading Speed: {speechRate === 0.5 ? 'Slow' : speechRate === 1.0 ? 'Normal' : 'Fast'}
+              </label>
+              <div className="speed-control">
+                <span className="speed-label">Slow</span>
+                <input
+                  id="speed-slider"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.5"
+                  value={speechRate}
+                  onChange={(e) => handleRateChange(parseFloat(e.target.value))}
+                  className="settings-slider"
+                />
+                <span className="speed-label">Fast</span>
+              </div>
+            </div>
+
+            <button type="button" className="test-speech-btn" onClick={handleTestSpeech}>
+              🎵 Test Voice
+            </button>
+          </div>
+
+          <hr className="settings-divider" />
+
+          {/* Theme Settings */}
+          <div className="settings-section">
+            <h3>🎨 Appearance</h3>
+            <div className="settings-field">
+              <label>Theme</label>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="theme-toggle-btn"
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                <span className="theme-icon">{isDark ? '☀️' : '🌙'}</span>
+                <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+              </button>
+            </div>
+          </div>
+
+          {window.electronAPI && (
+            <>
+              <hr className="settings-divider" />
+
+              {/* System Settings */}
+              <div className="settings-section">
+                <h3>💻 System</h3>
+                
+                <div className="settings-field">
+                  <label className="checkbox-label">
+                    <input 
+                      type="checkbox" 
+                      checked={openAtLogin} 
+                      onChange={handleOpenAtLoginChange}
+                    />
+                    <span>Open at login</span>
+                  </label>
+                  <div className="settings-note">
+                    Note: This feature only works in packaged app (!isDev).
+                  </div>
+                </div>
+              </div>
+
+              <hr className="settings-divider" />
+
+              {/* Reminder Settings */}
+              <div className="settings-section">
+                <h3>⏰ Daily Reminder</h3>
+                
+                <div className="settings-field">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={reminder.enabled}
+                      onChange={handleReminderToggle}
+                    />
+                    <span>Enable daily study reminder</span>
+                  </label>
+                </div>
+
+                {reminder.enabled && (
+                  <div className="settings-field">
+                    <label htmlFor="reminderTime">Reminder time</label>
+                    <input
+                      id="reminderTime"
+                      type="time"
+                      value={formattedTime}
+                      onChange={handleTimeChange}
+                      className="time-input"
+                    />
+                  </div>
+                )}
+
+                <button type="button" className="save-reminder-btn" onClick={handleSaveReminder}>
+                  💾 Save Reminder
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      )}
 
-      <div className="input-group">
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-          <span>Giao diện:</span>
-        </label>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="btn btn-secondary"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', width: 'auto' }}
-          aria-label={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
-        >
-          <span style={{ fontSize: '20px' }}>
-            {isDark ? '☀️' : '🌙'}
-          </span>
-          <span>{isDark ? 'Sáng' : 'Tối'}</span>
-        </button>
-      </div>
-
-      <hr className="settings-divider" />
-
-      <div className="input-group">
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <input type="checkbox" checked={openAtLogin} onChange={handleOpenAtLoginChange} style={{ width: 'auto' }} />
-          Mở ứng dụng khi khởi động máy tính
-        </label>
-        <div className="settings-note">
-          Lưu ý: Tùy chọn này chỉ hoạt động khi ứng dụng được đóng gói (!isDev).
+        <div className="settings-footer">
+          <button type="button" className="close-btn" onClick={onClose}>
+            Done
+          </button>
         </div>
-      </div>
-
-      <hr className="settings-divider" />
-
-      <div className="input-group">
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <input
-            type="checkbox"
-            checked={reminder.enabled}
-            onChange={handleReminderToggle}
-            style={{ width: 'auto' }}
-          />
-          Bật nhắc nhở ôn tập hằng ngày
-        </label>
-      </div>
-
-      {reminder.enabled && (
-        <div className="input-group" style={{ marginLeft: '24px' }}>
-          <label htmlFor="reminderTime">Thời gian nhắc nhở</label>
-          <input
-            id="reminderTime"
-            type="time"
-            value={formattedTime}
-            onChange={handleTimeChange}
-            style={{ width: 'auto', padding: '8px 12px' }}
-          />
-        </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '24px' }}>
-        <button type="button" className="btn btn-primary" onClick={handleSaveReminder}>
-          Lưu nhắc nhở
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onClose}>
-          Đóng
-        </button>
       </div>
     </div>
   );

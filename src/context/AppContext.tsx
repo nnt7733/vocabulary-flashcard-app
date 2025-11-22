@@ -43,7 +43,9 @@ const initialState: AppState = {
   showImportForm: false,
   selectedFolderId: null,
   selectedSetId: null,
-  studyMode: null
+  studyMode: null,
+  learningMode: null,
+  showFavoritesOnly: false
 };
 
 function createFlashcardFromImport(card: ImportedCard, setId: string): Flashcard {

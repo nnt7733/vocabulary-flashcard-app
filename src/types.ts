@@ -9,6 +9,7 @@ export interface Flashcard {
   isNew: boolean;
   status?: 'active' | 'learned';
   setId: string; // Reference to vocabulary set
+  isFavorite?: boolean; // Star for favorites
 }
 
 export interface VocabularySet {
@@ -56,6 +57,8 @@ export interface AppState {
   selectedFolderId: string | null;
   selectedSetId: string | null;
   studyMode: 'set' | 'quick' | null; // 'set' = study by set, 'quick' = quick study all sets
+  learningMode: 'study' | 'test' | null; // 'study' = exposure only, 'test' = tracks progress
+  showFavoritesOnly: boolean; // Filter to show only favorite cards
 }
 
 // Spaced repetition schedule based on the image

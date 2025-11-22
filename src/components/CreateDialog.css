@@ -1,0 +1,170 @@
+.create-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.create-dialog {
+  width: 90%;
+  max-width: 400px;
+  padding: 24px;
+  animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="light"] .create-dialog {
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.create-dialog-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme="light"] .create-dialog-title {
+  color: #000000;
+}
+
+.create-dialog-icon {
+  font-size: 1.5rem;
+}
+
+.create-dialog-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+[data-theme="light"] .create-dialog-input {
+  background: rgba(0, 0, 0, 0.05);
+  color: #000000;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.create-dialog-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="light"] .create-dialog-input:focus {
+  border-color: #000000;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.create-dialog-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="light"] .create-dialog-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.create-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.create-dialog-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.create-dialog-btn-cancel {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .create-dialog-btn-cancel {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000000;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.create-dialog-btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+[data-theme="light"] .create-dialog-btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.create-dialog-btn-confirm {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] .create-dialog-btn-confirm {
+  background: #000000;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.create-dialog-btn-confirm:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="light"] .create-dialog-btn-confirm:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.create-dialog-btn-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+

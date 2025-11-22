@@ -101,6 +101,176 @@ function setupIPCHandlers() {
     scheduleReminder();
     return { success: true };
   });
+
+  // Fetch Quizlet set data
+  ipcMain.handle('quizlet:fetch', async (_event, quizletUrl) => {
+    try {
+      const https = require('https');
+      const { URL } = require('url');
+
+      // Parse Quizlet URL
+      const url = new URL(quizletUrl);
+      
+      if (!url.hostname.includes('quizlet.com')) {
+        return { success: false, error: 'Invalid Quizlet URL' };
+      }
+
+      return new Promise((resolve) => {
+        const options = {
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        };
+
+        const req = https.request(options, (res) => {
+          let data = '';
+
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+
+          res.on('end', () => {
+            try {
+              const terms = [];
+              
+              // Method 1: Extract from multiple JSON patterns
+              const jsonPatterns = [
+                /window\.Quizlet\["setPageData"\]\s*=\s*({.*?});/s,
+                /window\.__INITIAL_STATE__\s*=\s*({.*?});/s,
+                /"termIdToTermsMap":\s*({.*?}),/s,
+                /"terms":\s*\[(.*?)\]/s
+              ];
+
+              for (const pattern of jsonPatterns) {
+                const match = data.match(pattern);
+                if (match) {
+                  try {
+                    const jsonStr = match[1];
+                    const jsonData = JSON.parse(jsonStr);
+                    
+                    // Try different data structures
+                    let termsList = jsonData?.studyModelsById?.termModels ||
+                                   jsonData?.termIdToTermsMap ||
+                                   jsonData?.terms;
+                    
+                    if (termsList && typeof termsList === 'object') {
+                      for (const id in termsList) {
+                        const item = termsList[id];
+                        const term = item?.word || item?.term || item?.plainText || '';
+                        const definition = item?.definition || item?._definition || '';
+                        if (term && definition) {
+                          terms.push({ 
+                            term: term.toString().trim().replace(/[\n\r]+/g, ' '), 
+                            definition: definition.toString().trim().replace(/[\n\r]+/g, ' ')
+                          });
+                        }
+                      }
+                    }
+                    
+                    if (terms.length > 0) break;
+                  } catch (e) {
+                    // Continue to next pattern
+                  }
+                }
+              }
+
+              // Method 2: HTML parsing with multiple patterns
+              if (terms.length === 0) {
+                const htmlPatterns = [
+                  /<span[^>]*class="[^"]*TermText[^"]*"[^>]*>(.*?)<\/span>/gs,
+                  /<div[^>]*class="[^"]*SetPageTerm-[^"]*"[^>]*>(.*?)<\/div>/gs,
+                  /data-term="([^"]+)"[^>]*data-definition="([^"]+)"/g
+                ];
+
+                for (const pattern of htmlPatterns) {
+                  const matches = [...data.matchAll(pattern)];
+                  
+                  if (pattern.source.includes('data-term')) {
+                    // Direct attribute extraction
+                    matches.forEach(match => {
+                      const term = match[1]?.trim();
+                      const definition = match[2]?.trim();
+                      if (term && definition) {
+                        terms.push({ term, definition });
+                      }
+                    });
+                  } else {
+                    // Pair-wise extraction
+                    for (let i = 0; i < matches.length - 1; i += 2) {
+                      const term = matches[i][1]?.replace(/<[^>]+>/g, '').trim();
+                      const definition = matches[i + 1]?.[1]?.replace(/<[^>]+>/g, '').trim();
+                      if (term && definition) {
+                        terms.push({ term, definition });
+                      }
+                    }
+                  }
+                  
+                  if (terms.length > 0) break;
+                }
+              }
+
+              // Method 3: API endpoint fallback (if available)
+              if (terms.length === 0) {
+                const apiMatch = data.match(/"studyableItemId":"(\d+)"/);
+                if (apiMatch) {
+                  console.log('Found studyable ID:', apiMatch[1]);
+                  // Could potentially call Quizlet API here
+                }
+              }
+
+              if (terms.length === 0) {
+                console.log('HTML preview:', data.substring(0, 1000));
+                resolve({ 
+                  success: false, 
+                  error: 'Không tìm thấy từ vựng. Set có thể bị private hoặc Quizlet đã thay đổi cấu trúc. Thử Manual Import thay thế.' 
+                });
+              } else {
+                console.log(`✅ Extracted ${terms.length} terms from Quizlet`);
+                resolve({ 
+                  success: true, 
+                  terms,
+                  count: terms.length 
+                });
+              }
+            } catch (error) {
+              console.error('Parse error:', error);
+              resolve({ 
+                success: false, 
+                error: 'Lỗi khi parse dữ liệu: ' + error.message 
+              });
+            }
+          });
+        });
+
+        req.on('error', (error) => {
+          resolve({ 
+            success: false, 
+            error: 'Không thể kết nối tới Quizlet: ' + error.message 
+          });
+        });
+
+        req.setTimeout(10000, () => {
+          req.destroy();
+          resolve({ 
+            success: false, 
+            error: 'Timeout - Quizlet không phản hồi' 
+          });
+        });
+
+        req.end();
+      });
+    } catch (error) {
+      return { 
+        success: false, 
+        error: 'Lỗi: ' + error.message 
+      };
+    }
+  });
 }
 
 function createWindow() {

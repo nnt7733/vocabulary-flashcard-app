@@ -42,6 +42,7 @@ type ListData = {
   onEdit: (card: Flashcard) => void;
   onDelete: (cardId: string) => void;
   onRestore: (card: Flashcard) => void;
+  onToggleFavorite: (card: Flashcard) => void;
   getLevelColor: (level: number) => string;
   getLevelText: (level: number) => string;
   getUrgency: (card: Flashcard) => ReturnType<typeof calculateCardUrgency>;
@@ -94,6 +95,13 @@ const FlashcardRow: React.FC<ListChildComponentProps<ListData>> = ({ index, styl
       <div className={styles.card}>
         <div className={styles.cardContent}>
           <div className={styles.cardHeader}>
+            <button
+              className={styles.favoriteBtn}
+              onClick={() => data.onToggleFavorite(card)}
+              title={card.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {card.isFavorite ? '⭐' : '☆'}
+            </button>
             <span
               className={styles.levelBadge}
               style={{ background: isLearned ? '#10b981' : data.getLevelColor(card.currentLevel) }}
@@ -196,6 +204,13 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
     });
   }, [onUpdateCard]);
 
+  const handleToggleFavorite = useCallback((card: Flashcard) => {
+    onUpdateCard({
+      ...card,
+      isFavorite: !card.isFavorite
+    });
+  }, [onUpdateCard]);
+
   const confirmDeleteAll = useCallback(() => {
     onDeleteAll();
     setShowDeleteConfirm(false);
@@ -224,11 +239,12 @@ const FlashcardList: React.FC<FlashcardListProps> = ({
       onEdit: handleEdit,
       onDelete: handleDelete,
       onRestore: handleRestore,
+      onToggleFavorite: handleToggleFavorite,
       getLevelColor,
       getLevelText,
       getUrgency: calculateCardUrgency
     }),
-    [cardsToRender, handleEdit, handleDelete, handleRestore]
+    [cardsToRender, handleEdit, handleDelete, handleRestore, handleToggleFavorite]
   );
 
   if (editingCard) {

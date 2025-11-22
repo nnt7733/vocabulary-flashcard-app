@@ -6,7 +6,10 @@ interface ImportFormProps {
   onClose: () => void;
 }
 
+type ImportMode = 'normal' | 'quizlet';
+
 const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
+  const [importMode, setImportMode] = useState<ImportMode>('normal');
   const [inputText, setInputText] = useState('');
   const [termDelimiter, setTermDelimiter] = useState<DelimiterType>('tab');
   const [cardSeparator, setCardSeparator] = useState<CardSeparatorType>('newline');
@@ -14,6 +17,10 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
   const [customCardSeparator, setCustomCardSeparator] = useState('');
   const [previewCards, setPreviewCards] = useState<{ term: string; definition: string }[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [importedCount, setImportedCount] = useState(0);
 
   const handleTextareaKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Tab') {
@@ -58,6 +65,37 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     return interpretDelimiter(customCardSeparator);
   }, [cardSeparator, customCardSeparator, interpretDelimiter]);
 
+  // Parse Quizlet CSV format
+  const parseQuizletCSV = useCallback((csvText: string): { term: string; definition: string }[] => {
+    const lines = csvText.trim().split('\n');
+    const cards: { term: string; definition: string }[] = [];
+    
+    // Skip header row if it starts with "Term,Definition"
+    const startIndex = lines[0]?.trim().toLowerCase().startsWith('term') ? 1 : 0;
+    
+    for (let i = startIndex; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      // Parse CSV with quoted values
+      // Match: "text","text" or text,text
+      const csvRegex = /^"(.*)","(.*)"$|^([^,]+),(.+)$/;
+      const match = line.match(csvRegex);
+      
+      if (match) {
+        // Unescape doubled quotes ""  -> "
+        const term = (match[1] || match[3] || '').replace(/""/g, '"').trim();
+        const definition = (match[2] || match[4] || '').replace(/""/g, '"').trim();
+        
+        if (term && definition) {
+          cards.push({ term, definition });
+        }
+      }
+    }
+    
+    return cards;
+  }, []);
+
   const parseCards = useCallback(() => {
     if (!inputText.trim()) {
       setPreviewCards([]);
@@ -65,6 +103,24 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       return;
     }
 
+    // Quizlet mode
+    if (importMode === 'quizlet') {
+      try {
+        const cards = parseQuizletCSV(inputText);
+        if (cards.length === 0) {
+          setParseError('Không tìm thấy thẻ hợp lệ. Hãy chắc chắn bạn đã dán đúng định dạng CSV từ Quizlet.');
+        } else {
+          setParseError(null);
+        }
+        setPreviewCards(cards);
+      } catch (error) {
+        setParseError('Lỗi khi phân tích dữ liệu CSV. Vui lòng kiểm tra lại định dạng.');
+        setPreviewCards([]);
+      }
+      return;
+    }
+
+    // Normal mode
     if (!resolvedTermDelimiter) {
       setParseError('Vui lòng nhập ký tự phân tách giữa thuật ngữ và định nghĩa.');
       setPreviewCards([]);
@@ -119,19 +175,47 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
     }
 
     setPreviewCards(cards);
-  }, [cardSeparator, inputText, resolvedCardSeparator, resolvedTermDelimiter]);
+  }, [cardSeparator, inputText, resolvedCardSeparator, resolvedTermDelimiter, importMode, parseQuizletCSV]);
 
   useEffect(() => {
     parseCards();
   }, [parseCards]);
 
-  const handleImport = () => {
-    if (previewCards.length > 0) {
-      onImport(previewCards);
+  const handleImport = async () => {
+    if (previewCards.length === 0) return;
+    
+    setIsImporting(true);
+    setImportProgress(0);
+    
+    const totalCards = previewCards.length;
+    const batchSize = 10; // Process 10 cards at a time
+    
+    // Simulate progressive import for smooth UX
+    for (let i = 0; i < totalCards; i += batchSize) {
+      await new Promise(resolve => setTimeout(resolve, 100)); // Small delay for animation
+      const progress = Math.min(((i + batchSize) / totalCards) * 100, 100);
+      setImportProgress(progress);
+    }
+    
+    // Actually import the cards
+    onImport(previewCards);
+    setImportedCount(previewCards.length);
+    
+    // Show success
+    setImportProgress(100);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    setIsImporting(false);
+    setShowSuccess(true);
+    
+    // Auto-hide success message and reset after 3 seconds
+    setTimeout(() => {
+      setShowSuccess(false);
       setInputText('');
       setPreviewCards([]);
       setParseError(null);
-    }
+      setImportProgress(0);
+    }, 3000);
   };
 
   return (
@@ -146,21 +230,132 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         </button>
       </div>
 
+      {/* Import Mode Selector */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+          <button
+            onClick={() => setImportMode('normal')}
+            className={`btn ${importMode === 'normal' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '10px 20px', fontSize: '0.9rem' }}
+          >
+            📝 Normal Import
+          </button>
+          <button
+            onClick={() => setImportMode('quizlet')}
+            className={`btn ${importMode === 'quizlet' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ padding: '10px 20px', fontSize: '0.9rem' }}
+          >
+            🎓 Import from Quizlet
+          </button>
+        </div>
+      </div>
+
       <p className="import-description">
-        Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.). Mỗi dòng nên có định dạng:
-        <br />
-        <strong>Từ</strong> [delimiter] <strong>Định nghĩa</strong>
+        {importMode === 'normal' ? (
+          <>
+            Chép và dán dữ liệu ở đây (từ Word, Excel, Google Docs, v.v.). Mỗi dòng nên có định dạng:
+            <br />
+            <strong>Từ</strong> [delimiter] <strong>Định nghĩa</strong>
+          </>
+        ) : (
+          <>
+            <strong>🎓 Import từ Quizlet - 3 bước đơn giản:</strong>
+            <br />
+            <div style={{ 
+              background: 'var(--bg-secondary)', 
+              padding: '12px 16px', 
+              borderRadius: '8px',
+              marginTop: '12px',
+              marginBottom: '12px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                  1️⃣ Copy script → 2️⃣ Chạy trên Quizlet (F12) → 3️⃣ Paste vào đây
+                </span>
+                <button
+                  onClick={() => {
+                    const script = `(() => {
+  try {
+    const terms = document.getElementsByClassName('SetPageTermsList-term');
+    if (terms.length === 0) {
+      console.log('No terms found. Make sure you are on the correct page.');
+      return;
+    }
+    const csv = ['Term,Definition'];
+    let extractedCount = 0;
+    Array.from(terms).forEach((term) => {
+      const termTexts = term.querySelectorAll('.TermText');
+      if (termTexts.length >= 2) {
+        const word = termTexts[0].textContent.trim().replace(/[\\n\\r]+/g, ' ');
+        const def = termTexts[1].textContent.trim().replace(/[\\n\\r]+/g, ' ');
+        const escapedWord = word.replace(/"/g, '""');
+        const escapedDef = def.replace(/"/g, '""');
+        csv.push(\`"\${escapedWord}","\${escapedDef}"\`);
+        extractedCount++;
+      }
+    });
+    if (extractedCount === 0) {
+      console.log('No valid term pairs found.');
+      return;
+    }
+    navigator.clipboard.writeText(csv.join('\\n'))
+      .then(() => console.log(\`✅ CSV data with \${extractedCount} terms copied to clipboard!\`))
+      .catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = csv.join('\\n');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        console.log(\`✅ CSV data with \${extractedCount} terms copied to clipboard!\`);
+      });
+  } catch (error) {
+    console.error('Script error:', error);
+  }
+})();`;
+                    navigator.clipboard.writeText(script).then(() => {
+                      alert('✅ Script đã copy!\n\nBước tiếp theo:\n1. Mở Quizlet set\n2. Nhấn F12\n3. Paste vào Console\n4. Nhấn Enter\n5. Quay lại app và Paste dữ liệu');
+                    }).catch(() => {
+                      alert('Không thể copy. Hãy copy script từ file QUIZLET_IMPORT_GUIDE.md');
+                    });
+                  }}
+                  className="btn btn-success"
+                  style={{ 
+                    fontSize: '0.8125rem', 
+                    padding: '8px 14px',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>📋</span>
+                  <span>Copy Script</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </p>
 
-      <div className="input-group">
-        <textarea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={handleTextareaKeyDown}
-          placeholder={'Từ 1\tĐịnh nghĩa 1\nTừ 2\tĐịnh nghĩa 2'}
-          className="textarea-large"
-        />
-      </div>
+      {importMode === 'normal' && (
+        <div className="input-group">
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleTextareaKeyDown}
+            placeholder='Từ 1\tĐịnh nghĩa 1\nTừ 2\tĐịnh nghĩa 2'
+            className="textarea-large"
+          />
+        </div>
+      )}
 
       {parseError && (
         <div className="import-error">
@@ -168,7 +363,9 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
         </div>
       )}
 
-      <div className="delimiter-options">
+      {/* Show delimiter options only in normal mode */}
+      {importMode === 'normal' && (
+        <div className="delimiter-options">
         <div className="delimiter-group">
           <label>Giữa thuật ngữ và định nghĩa</label>
           <div className="radio-group">
@@ -266,7 +463,58 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
             />
           )}
         </div>
-      </div>
+        </div>
+      )}
+
+      {/* Progress Bar */}
+      {isImporting && (
+        <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            marginBottom: '8px',
+            fontSize: '0.875rem',
+            color: 'var(--text-secondary)'
+          }}>
+            <span>Đang import...</span>
+            <span>{Math.round(importProgress)}%</span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '8px',
+            backgroundColor: 'var(--bg-tertiary)',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${importProgress}%`,
+              height: '100%',
+              backgroundColor: '#0e7c0e',
+              transition: 'width 0.3s ease',
+              borderRadius: '4px'
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {showSuccess && (
+        <div style={{
+          marginTop: '20px',
+          marginBottom: '20px',
+          padding: '16px',
+          backgroundColor: '#d1fae5',
+          border: '1px solid #86efac',
+          borderRadius: '8px',
+          color: '#065f46',
+          textAlign: 'center',
+          fontSize: '1rem',
+          fontWeight: '600',
+          animation: 'fadeIn 0.3s ease-out'
+        }}>
+          ✅ Import hoàn tất – {importedCount} từ đã được thêm!
+        </div>
+      )}
 
       <div className="preview">
         <strong>Xem trước {previewCards.length} thẻ</strong>
@@ -287,15 +535,19 @@ const ImportForm: React.FC<ImportFormProps> = ({ onImport, onClose }) => {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
-        <button onClick={onClose} className="btn btn-secondary">
-          Hủy
+        <button 
+          onClick={onClose} 
+          className="btn btn-secondary"
+          disabled={isImporting}
+        >
+          {showSuccess ? 'Đóng' : 'Hủy'}
         </button>
         <button
           onClick={handleImport}
           className="btn btn-primary"
-          disabled={previewCards.length === 0}
+          disabled={previewCards.length === 0 || isImporting}
         >
-          Nhập {previewCards.length} thẻ
+          {isImporting ? 'Đang import...' : `Nhập ${previewCards.length} thẻ`}
         </button>
       </div>
     </div>

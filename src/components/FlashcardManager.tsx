@@ -5,24 +5,26 @@ import ImportForm from './ImportForm';
 import StudySession, { StudySessionResult } from './StudySession';
 import SessionSummary from './SessionSummary';
 import FlashcardList from './FlashcardList';
+import StudyModeSelector from './StudyModeSelector';
 import { useAppContext } from '../context/AppContext';
 import {
-  getDueSoonCards,
-  getLongOverdueCards,
-  getOverdueCards,
-  sortCardsByUrgency,
   calculateCardUrgency
 } from '../utils/overdue';
-import PriorityReviewPanel from './PriorityReviewPanel';
 import SettingsForm from './SettingsForm';
-import FolderList from './FolderList';
-import './FolderList.css';
+import HomePage from './HomePage';
+import FoldersManagementPage from './FoldersManagementPage';
+
+type Page = 'home' | 'folders' | 'set-detail' | 'flashcard-list';
 
 const FlashcardManager: React.FC = () => {
   const { state, dispatch, storageError, clearStorageError } = useAppContext();
+  const [currentPage, setCurrentPage] = useState<Page>('home');
   const [showSummary, setShowSummary] = useState(false);
-  const [showFlashcardList, setShowFlashcardList] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showModeSelector, setShowModeSelector] = useState(false);
+  const [pendingStudyParams, setPendingStudyParams] = useState<{ mode: 'set' | 'quick'; setId?: string } | null>(null);
+  const [learningMode, setLearningMode] = useState<'study' | 'test'>('test');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sessionResults, setSessionResults] = useState<{
     correctCount: number;
     incorrectCount: number;
@@ -31,6 +33,7 @@ const FlashcardManager: React.FC = () => {
     startedAt: Date;
     finishedAt: Date;
     overdueReviewed: number;
+    learningMode?: 'study' | 'test';
   } | null>(null);
   const [currentSessionCards, setCurrentSessionCards] = useState<Flashcard[] | null>(null);
   const [uiMessage, setUiMessage] = useState<{
@@ -65,31 +68,6 @@ const FlashcardManager: React.FC = () => {
     () => filteredFlashcards.filter(card => card.status !== 'learned'),
     [filteredFlashcards]
   );
-
-  const learnedFlashcards = useMemo(
-    () => state.flashcards.filter(card => card.status === 'learned'),
-    [state.flashcards]
-  );
-
-  const stats = useMemo(() => getStudyStats(activeFlashcards), [activeFlashcards]);
-  const overdueCards = useMemo(() => getOverdueCards(activeFlashcards), [activeFlashcards]);
-  const longOverdueCards = useMemo(() => getLongOverdueCards(activeFlashcards), [activeFlashcards]);
-  const dueSoonCards = useMemo(() => getDueSoonCards(activeFlashcards), [activeFlashcards]);
-  // Cards for review excluding new cards today (for stats display)
-  const cardsForReview = useMemo(
-    () => sortCardsByUrgency(getCardsForReview(activeFlashcards, { excludeNewToday: true })),
-    [activeFlashcards]
-  );
-  const priorityCards = useMemo(() => {
-    const combined = [...longOverdueCards, ...overdueCards, ...dueSoonCards];
-    const unique = new Map<string, Flashcard>();
-    combined.forEach(card => {
-      if (!unique.has(card.id)) {
-        unique.set(card.id, card);
-      }
-    });
-    return sortCardsByUrgency(Array.from(unique.values())).slice(0, 5);
-  }, [dueSoonCards, longOverdueCards, overdueCards]);
 
   const handleImport = (cards: { term: string; definition: string }[]) => {
     if (!cards.length) return;
@@ -150,63 +128,157 @@ const FlashcardManager: React.FC = () => {
     });
   }, [state.flashcards]);
 
-  const handleStartStudy = (mode: 'set' | 'quick') => {
+  const handleStartStudy = (mode: 'set' | 'quick', setId?: string, favoritesOnly: boolean = false) => {
     let cardsToStudy: Flashcard[] = [];
 
     if (mode === 'set') {
-      if (!state.selectedSetId) {
+      const targetSetId = setId || state.selectedSetId;
+      if (!targetSetId) {
         setUiMessage({
           type: 'warning',
           text: 'Vui lòng chọn một set để học!'
         });
         return;
       }
-      // Always allow studying a set - get all active cards in the set
-      cardsToStudy = filteredFlashcards.filter(card => card.status !== 'learned');
+      // Get all active cards in the set
+      cardsToStudy = state.flashcards.filter(card => card.setId === targetSetId && card.status !== 'learned');
+      
+      // Filter favorites if requested
+      if (favoritesOnly) {
+        cardsToStudy = cardsToStudy.filter(card => card.isFavorite);
+      }
     } else {
-      // Quick Study mode - get all active cards (with optional shuffle)
+      // Quick Study mode - get all active cards
       cardsToStudy = getQuickStudyCards;
+      
+      // Filter favorites if requested
+      if (favoritesOnly) {
+        cardsToStudy = cardsToStudy.filter(card => card.isFavorite);
+      }
     }
 
     if (cardsToStudy.length === 0) {
       setUiMessage({
         type: 'info',
-        text: mode === 'set'
+        text: favoritesOnly
+          ? 'Không có từ favorite nào. Hãy đánh dấu ⭐ một số từ!'
+          : mode === 'set'
           ? 'Không có thẻ nào trong set này. Hãy thêm thẻ mới!'
           : 'Không có thẻ nào để học. Hãy thêm thẻ mới vào các set!'
       });
       return;
     }
 
+    // Show mode selector before starting
+    setPendingStudyParams({ mode, setId });
+    setShowModeSelector(true);
     setUiMessage(null);
+  };
+
+  const handleModeSelected = (selectedMode: 'study' | 'test') => {
+    if (!pendingStudyParams) return;
+
+    const { mode, setId } = pendingStudyParams;
+    let cardsToStudy: Flashcard[] = [];
+
+    if (mode === 'set') {
+      const targetSetId = setId || state.selectedSetId;
+      cardsToStudy = state.flashcards.filter(card => card.setId === targetSetId && card.status !== 'learned');
+    } else {
+      cardsToStudy = getQuickStudyCards;
+    }
+
+    if (showFavoritesOnly) {
+      cardsToStudy = cardsToStudy.filter(card => card.isFavorite);
+    }
+
+    setLearningMode(selectedMode);
     setCurrentSessionCards(cardsToStudy);
+    setShowModeSelector(false);
+    setPendingStudyParams(null);
+    
     dispatch({ 
       type: 'START_STUDY', 
       payload: { 
         mode, 
-        setId: mode === 'set' ? (state.selectedSetId ?? undefined) : undefined 
+        setId: mode === 'set' ? (setId || state.selectedSetId || undefined) : undefined 
       } 
     });
   };
 
-  const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt, overdueReviewed }: StudySessionResult) => {
-    const updatedFlashcards = state.flashcards.map(card => {
-      const updated = updatedCards.find(uc => uc.id === card.id);
-      return updated || card;
-    });
+  const handleCreateNewSet = (setName: string) => {
+    console.log('handleCreateNewSet called with name:', setName);
 
-    // Update word counts for all sets
-    const updatedSets = state.vocabularySets.map(set => {
-      const wordCount = updatedFlashcards.filter(c => c.setId === set.id && c.status !== 'learned').length;
-      return { ...set, wordCount, updatedAt: new Date() };
-    });
+    const generateId = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
-    // Update sets first
-    updatedSets.forEach(set => {
-      dispatch({ type: 'UPDATE_VOCABULARY_SET', payload: set });
-    });
+    const newSet = {
+      id: generateId(),
+      name: setName,
+      folderId: '', // No folder
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      wordCount: 0
+    };
 
-    dispatch({ type: 'COMPLETE_STUDY', payload: { updatedCards: updatedFlashcards } });
+    console.log('Creating new set:', newSet);
+    dispatch({ type: 'CREATE_VOCABULARY_SET', payload: newSet });
+    dispatch({ type: 'SET_SELECTED_SET', payload: newSet.id });
+    setCurrentPage('set-detail');
+  };
+
+  const handleCreateNewFolder = (folderName: string) => {
+    console.log('handleCreateNewFolder called with name:', folderName);
+
+    const generateId = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+    const newFolder = {
+      id: generateId(),
+      name: folderName,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      setCount: 0
+    };
+
+    console.log('Creating new folder:', newFolder);
+    dispatch({ type: 'CREATE_FOLDER', payload: newFolder });
+    setCurrentPage('folders');
+  };
+
+  const handleSelectSet = (setId: string) => {
+    dispatch({ type: 'SET_SELECTED_SET', payload: setId });
+    setCurrentPage('set-detail');
+  };
+
+  const handleStudyComplete = ({ updatedCards, incorrectCards, stats, durationMs, startedAt, finishedAt, overdueReviewed, learningMode: completedMode }: StudySessionResult) => {
+    // Only update flashcards if in TEST mode
+    if (completedMode === 'test') {
+      const updatedFlashcards = state.flashcards.map(card => {
+        const updated = updatedCards.find(uc => uc.id === card.id);
+        return updated || card;
+      });
+
+      // Update word counts for all sets
+      const updatedSets = state.vocabularySets.map(set => {
+        const wordCount = updatedFlashcards.filter(c => c.setId === set.id && c.status !== 'learned').length;
+        return { ...set, wordCount, updatedAt: new Date() };
+      });
+
+      // Update sets first
+      updatedSets.forEach(set => {
+        dispatch({ type: 'UPDATE_VOCABULARY_SET', payload: set });
+      });
+
+      dispatch({ type: 'COMPLETE_STUDY', payload: { updatedCards: updatedFlashcards } });
+    } else {
+      // Study mode - just exit without updating
+      dispatch({ type: 'EXIT_STUDY' });
+    }
 
     const durationMinutes = Math.round((durationMs / 60000) * 100) / 100;
 
@@ -217,7 +289,8 @@ const FlashcardManager: React.FC = () => {
       durationMinutes,
       startedAt,
       finishedAt,
-      overdueReviewed
+      overdueReviewed,
+      learningMode: completedMode
     });
     setShowSummary(true);
     setCurrentSessionCards(null);
@@ -239,27 +312,57 @@ const FlashcardManager: React.FC = () => {
   };
 
   const handleFinishSession = () => {
-    const now = sessionResults?.finishedAt ?? new Date();
-    const cardsStudied = (sessionResults?.correctCount || 0) + (sessionResults?.incorrectCount || 0);
-    const session = {
-      id: Date.now().toString(),
-      date: now,
-      cardsStudied,
-      correctAnswers: sessionResults?.correctCount || 0,
-      totalTime: sessionResults ? Number(sessionResults.durationMinutes.toFixed(2)) : 0,
-      overdueReviews: sessionResults?.overdueReviewed || 0
-    };
+    // Only save session if it was in TEST mode
+    if (sessionResults?.learningMode === 'test') {
+      const now = sessionResults?.finishedAt ?? new Date();
+      const cardsStudied = (sessionResults?.correctCount || 0) + (sessionResults?.incorrectCount || 0);
+      const session = {
+        id: Date.now().toString(),
+        date: now,
+        cardsStudied,
+        correctAnswers: sessionResults?.correctCount || 0,
+        totalTime: sessionResults ? Number(sessionResults.durationMinutes.toFixed(2)) : 0,
+        overdueReviews: sessionResults?.overdueReviewed || 0
+      };
 
-    dispatch({ type: 'ADD_STUDY_SESSION', payload: session });
+      dispatch({ type: 'ADD_STUDY_SESSION', payload: session });
+    }
 
     setShowSummary(false);
     setSessionResults(null);
     setCurrentSessionCards(null);
   };
 
+  const handleStudyAgain = () => {
+    if (!currentSessionCards || currentSessionCards.length === 0) return;
+    
+    // Study again in STUDY mode (no progress tracking) with accuracy shown
+    setShowSummary(false);
+    setSessionResults(null);
+    setLearningMode('study');
+    
+    dispatch({ type: 'START_STUDY' });
+  };
+
   const handleUpdateCard = (updatedCard: Flashcard) => {
     dispatch({ type: 'UPDATE_FLASHCARD', payload: updatedCard });
     // Word count will be updated automatically in reducer
+  };
+
+  const handleToggleFavorite = (card: Flashcard) => {
+    console.log('Toggle favorite for:', card.term, 'Current:', card.isFavorite);
+    const updatedCard = {
+      ...card,
+      isFavorite: !card.isFavorite
+    };
+    dispatch({ type: 'UPDATE_FLASHCARD', payload: updatedCard });
+    
+    // Also update in current session if card is being studied
+    if (currentSessionCards) {
+      setCurrentSessionCards(currentSessionCards.map(c => 
+        c.id === card.id ? updatedCard : c
+      ));
+    }
   };
 
   const handleDeleteCard = (cardId: string) => {
@@ -271,12 +374,11 @@ const FlashcardManager: React.FC = () => {
     dispatch({ type: 'DELETE_ALL_FLASHCARDS' });
   };
 
-  const generateId = () =>
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-
   const reviveFlashcardFromBackup = (card: any): Flashcard => {
+    const generateId = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     // If no setId, assign to first set or create a default set
     let setId = card?.setId;
     if (!setId && state.vocabularySets.length > 0) {
@@ -327,14 +429,21 @@ const FlashcardManager: React.FC = () => {
     };
   };
 
-  const reviveSessionFromBackup = (session: any): StudySessionRecord => ({
-    id: typeof session?.id === 'string' ? session.id : generateId(),
-    date: session?.date ? new Date(session.date) : new Date(),
-    cardsStudied: typeof session?.cardsStudied === 'number' ? session.cardsStudied : 0,
-    correctAnswers: typeof session?.correctAnswers === 'number' ? session.correctAnswers : 0,
-    totalTime: typeof session?.totalTime === 'number' ? session.totalTime : 0,
-    overdueReviews: typeof session?.overdueReviews === 'number' ? session.overdueReviews : 0
-  });
+  const reviveSessionFromBackup = (session: any): StudySessionRecord => {
+    const generateId = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    
+    return {
+      id: typeof session?.id === 'string' ? session.id : generateId(),
+      date: session?.date ? new Date(session.date) : new Date(),
+      cardsStudied: typeof session?.cardsStudied === 'number' ? session.cardsStudied : 0,
+      correctAnswers: typeof session?.correctAnswers === 'number' ? session.correctAnswers : 0,
+      totalTime: typeof session?.totalTime === 'number' ? session.totalTime : 0,
+      overdueReviews: typeof session?.overdueReviews === 'number' ? session.overdueReviews : 0
+    };
+  };
 
   const handleExportBackup = () => {
     if (state.flashcards.length === 0 && state.studySessions.length === 0) {
@@ -449,20 +558,40 @@ const FlashcardManager: React.FC = () => {
     </div>
   ) : null;
 
-  if (showSettings) {
+  // Render mode selector
+  if (showModeSelector && pendingStudyParams) {
+    const setName = pendingStudyParams.mode === 'set' && state.selectedSetId
+      ? state.vocabularySets.find(s => s.id === state.selectedSetId)?.name || 'Unknown Set'
+      : 'Quick Study';
+      
     return (
-      <div className="container">
-        <div className="header">
-          <h1>📚 Học Từ Vựng</h1>
-          <p>Hệ thống học từ vựng với spaced repetition</p>
-        </div>
+      <>
         {storageBanner}
         {notificationBanner}
-        <SettingsForm onClose={() => setShowSettings(false)} />
-      </div>
+        <StudyModeSelector
+          setName={setName}
+          onSelectMode={handleModeSelected}
+          onCancel={() => {
+            setShowModeSelector(false);
+            setPendingStudyParams(null);
+          }}
+        />
+      </>
     );
   }
 
+  // Render settings modal overlay if open
+  if (showSettings) {
+    return (
+      <>
+        {storageBanner}
+        {notificationBanner}
+        <SettingsForm onClose={() => setShowSettings(false)} />
+      </>
+    );
+  }
+
+  // Render session summary
   if (showSummary && sessionResults) {
     return (
       <div className="container">
@@ -479,14 +608,92 @@ const FlashcardManager: React.FC = () => {
           durationMinutes={sessionResults.durationMinutes}
           onReviewIncorrect={handleReviewIncorrect}
           onFinish={handleFinishSession}
+          onStudyAgain={currentSessionCards && currentSessionCards.length > 0 ? handleStudyAgain : undefined}
+          learningMode={sessionResults.learningMode}
         />
       </div>
     );
   }
 
-  if (showFlashcardList) {
+  // Render study session
+  if (state.isStudying) {
+    const cardsToStudy = sessionResults && sessionResults.incorrectCards.length > 0
+      ? sessionResults.incorrectCards
+      : currentSessionCards ?? [];
+
+    return (
+      <>
+        {storageBanner}
+        {notificationBanner}
+        <StudySession
+          cards={cardsToStudy}
+          onComplete={handleStudyComplete}
+          onExit={handleExitStudy}
+          onToggleFavorite={handleToggleFavorite}
+          learningMode={learningMode}
+        />
+      </>
+    );
+  }
+
+  // Render import form (legacy support)
+  if (state.showImportForm) {
     return (
       <div className="container">
+        <div className="header">
+          <h1>📚 Học Từ Vựng</h1>
+          <p>Hệ thống học từ vựng với spaced repetition</p>
+        </div>
+        {storageBanner}
+        {notificationBanner}
+        <ImportForm
+          onImport={handleImport}
+          onClose={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: false })}
+        />
+      </div>
+    );
+  }
+
+  // Render flashcard list for a specific set
+  if (currentPage === 'flashcard-list' && state.selectedSetId) {
+    return (
+      <div className="container" style={{ position: 'relative' }}>
+        {/* Back Button - Top Left */}
+        <button
+          onClick={() => setCurrentPage('set-detail')}
+          style={{
+            position: 'fixed',
+            top: '12px',
+            left: '12px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: '#2a2a2a',
+            border: '1px solid #3a3a3a',
+            color: 'white',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            zIndex: 1000
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#3a3a3a';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#2a2a2a';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+          }}
+          title="Back"
+        >
+          ×
+        </button>
+
         <div className="header">
           <h1>📚 Học Từ Vựng</h1>
           <p>Hệ thống học từ vựng với spaced repetition</p>
@@ -499,219 +706,152 @@ const FlashcardManager: React.FC = () => {
           onDeleteCard={handleDeleteCard}
           onDeleteAll={handleDeleteAllCards}
         />
-        <div style={{ textAlign: 'center', marginTop: '24px' }}>
-          <button 
-            onClick={() => setShowFlashcardList(false)}
-            className="btn btn-secondary"
-          >
-            ← Quay lại
-          </button>
+      </div>
+    );
+  }
+
+  // Render set detail page
+  if (currentPage === 'set-detail' && state.selectedSetId) {
+    const selectedSet = state.vocabularySets.find(s => s.id === state.selectedSetId);
+    const activeCards = filteredFlashcards.filter(c => c.status !== 'learned');
+    const favoriteCards = activeCards.filter(c => c.isFavorite);
+    
+    return (
+      <div className="container" style={{ position: 'relative' }}>
+        {/* Back Button - Top Left */}
+        <button
+          onClick={() => {
+            dispatch({ type: 'SET_SELECTED_SET', payload: null });
+            setCurrentPage('home');
+          }}
+          style={{
+            position: 'fixed',
+            top: '12px',
+            left: '12px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: '#2a2a2a',
+            border: '1px solid #3a3a3a',
+            color: 'white',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            zIndex: 1000
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#3a3a3a';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#2a2a2a';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+          }}
+          title="Back to Home"
+        >
+          ×
+        </button>
+
+        <div className="header">
+          <h1>📚 {selectedSet?.name || 'Vocabulary Set'}</h1>
+          <p>Manage and study your vocabulary</p>
+        </div>
+        {storageBanner}
+        {notificationBanner}
+
+        <div className="card">
+          <h2 style={{ marginBottom: '16px', textAlign: 'center' }}>
+            {activeCards.length} Active Cards
+            {favoriteCards.length > 0 && (
+              <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginLeft: '8px' }}>
+                ({favoriteCards.length} ⭐ favorites)
+              </span>
+            )}
+          </h2>
+
+          {/* Favorites Filter Toggle */}
+          {favoriteCards.length > 0 && (
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <button
+                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                className={`btn ${showFavoritesOnly ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ fontSize: '0.875rem', padding: '8px 16px' }}
+              >
+                {showFavoritesOnly ? '⭐ Favorites Only' : '📚 All Cards'}
+              </button>
+            </div>
+          )}
+
+          <div className="controls" style={{ justifyContent: 'center', marginBottom: '24px' }}>
+            <button
+              onClick={() => handleStartStudy('set', undefined, showFavoritesOnly)}
+              className="btn btn-success"
+              disabled={showFavoritesOnly ? favoriteCards.length === 0 : activeCards.length === 0}
+            >
+              🚀 {showFavoritesOnly ? 'Study Favorites' : 'Start Learning'}
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
+              className="btn btn-primary"
+            >
+              ➕ Add Words
+            </button>
+            <button
+              onClick={() => setCurrentPage('flashcard-list')}
+              className="btn btn-secondary"
+              disabled={filteredFlashcards.length === 0}
+            >
+              📝 Manage Cards
+            </button>
+          </div>
+
         </div>
       </div>
     );
   }
 
-  if (state.isStudying) {
-    const cardsToStudy = sessionResults && sessionResults.incorrectCards.length > 0
-      ? sessionResults.incorrectCards
-      : currentSessionCards ?? cardsForReview;
-
+  // Render folders management page
+  if (currentPage === 'folders') {
     return (
       <>
         {storageBanner}
         {notificationBanner}
-        <StudySession
-          cards={cardsToStudy}
-          onComplete={handleStudyComplete}
-          onExit={handleExitStudy}
+        <FoldersManagementPage
+          onBack={() => setCurrentPage('home')}
+          onSelectSet={handleSelectSet}
+          onShowImportForm={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true })}
         />
       </>
     );
   }
 
+  // Render home page
   return (
-    <div className="container">
-      <div className="header">
-        <h1>📚 Học Từ Vựng</h1>
-        <p>Hệ thống học từ vựng với spaced repetition</p>
-      </div>
-
+    <>
       {storageBanner}
       {notificationBanner}
-
-      {state.showImportForm ? (
-        <ImportForm
-          onImport={handleImport}
-          onClose={() => dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: false })}
-        />
-      ) : (
-        <>
-          <FolderList
-            folders={state.folders}
-            sets={state.vocabularySets}
-            onSelectFolder={(folderId) => dispatch({ type: 'SET_SELECTED_FOLDER', payload: folderId || null })}
-            onSelectSet={(setId) => dispatch({ type: 'SET_SELECTED_SET', payload: setId || null })}
-            selectedFolderId={state.selectedFolderId}
-            selectedSetId={state.selectedSetId}
-            onShowImportForm={() => {
-              if (!state.selectedSetId) {
-                setUiMessage({
-                  type: 'warning',
-                  text: 'Vui lòng chọn một set để thêm từ vựng!'
-                });
-                return;
-              }
-              dispatch({ type: 'SET_SHOW_IMPORT_FORM', payload: true });
-            }}
-          />
-
-          <div className="card">
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '16px' }}>
-                🚀 Quick Study - Học tất cả sets
-              </h2>
-              <p className="study-ready-text">
-                {state.flashcards.filter(c => c.status !== 'learned').length > 0
-                  ? `Bạn có ${state.flashcards.filter(c => c.status !== 'learned').length} thẻ từ tất cả sets`
-                  : 'Không có thẻ nào để học'}
-              </p>
-            </div>
-            <div className="controls" style={{ justifyContent: 'center' }}>
-              <button
-                onClick={() => handleStartStudy('quick')}
-                className="btn btn-success"
-                disabled={state.flashcards.filter(c => c.status !== 'learned').length === 0}
-                title="Quick Study - Học từ cũ nhất từ tất cả sets"
-              >
-                🚀 Quick Study
-              </button>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="btn btn-secondary"
-              >
-                ⚙️ Cài đặt
-              </button>
-            </div>
-          </div>
-
-          {(overdueCards.length > 0 || longOverdueCards.length > 0) && (
-            <PriorityReviewPanel
-              overdueCards={overdueCards}
-              longOverdueCards={longOverdueCards}
-              dueSoonCards={[]}
-              topCards={priorityCards}
-              onStartReview={() => handleStartStudy('quick')}
-              onOpenFlashcardList={() => setShowFlashcardList(true)}
-            />
-          )}
-
-          <div className="stats">
-            <div className="stat-card">
-              <div className="stat-number">{stats.total}</div>
-              <div className="stat-label">Tổng thẻ</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{stats.new}</div>
-              <div className="stat-label">Thẻ mới</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{stats.due}</div>
-              <div className="stat-label">Cần ôn tập</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{state.studySessions.length}</div>
-              <div className="stat-label">Phiên học</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-number">{learnedFlashcards.length}</div>
-              <div className="stat-label">Đã hoàn thành</div>
-            </div>
-          </div>
-
-          {state.selectedSetId && (
-            <div className="card">
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <h2 style={{ marginBottom: '16px' }}>
-                  📚 Học Set: {state.vocabularySets.find(s => s.id === state.selectedSetId)?.name || 'Unknown'}
-                </h2>
-                <p className="study-ready-text">
-                  {filteredFlashcards.filter(c => c.status !== 'learned').length > 0
-                    ? `Bạn có ${filteredFlashcards.filter(c => c.status !== 'learned').length} thẻ trong set này`
-                    : 'Không có thẻ nào trong set này'}
-                </p>
-              </div>
-
-              <div className="controls">
-                <button
-                  onClick={() => setShowFlashcardList(true)}
-                  className="btn btn-secondary"
-                  disabled={filteredFlashcards.length === 0}
-                >
-                  📝 Quản lý từ vựng
-                </button>
-                <button
-                  onClick={() => handleStartStudy('set')}
-                  className="btn btn-success"
-                  disabled={filteredFlashcards.filter(c => c.status !== 'learned').length === 0}
-                  title="Học set đã chọn"
-                >
-                  📚 Học Set này
-                </button>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="btn btn-secondary"
-                >
-                  ⚙️ Cài đặt
-                </button>
-              </div>
-            </div>
-          )}
-
-
-          <div className="backup-controls">
-            <p>📦 Sao lưu dữ liệu định kỳ để tránh mất mát.</p>
-            <div className="backup-controls__actions">
-              <button onClick={handleExportBackup} className="btn btn-secondary">
-                ⬇️ Xuất JSON
-              </button>
-              <button onClick={handleImportBackup} className="btn btn-secondary">
-                ⬆️ Nhập JSON
-              </button>
-            </div>
-            <input
-              type="file"
-              accept="application/json"
-              ref={backupInputRef}
-              onChange={handleBackupFileChange}
-              style={{ display: 'none' }}
-            />
-          </div>
-
-          {state.flashcards.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginBottom: '16px' }}>
-                Thống kê theo cấp độ
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px' }}>
-                {Object.entries(stats.byLevel).map(([level, count]) => (
-                  <div key={level} className="level-stat-card" style={{ 
-                    border: level === '0' ? '2px solid #4ec9b0' : '1px solid var(--border-color)'
-                  }}>
-                    <div className="level-stat-number">
-                      {count}
-                    </div>
-                    <div className="level-stat-label">
-                      Cấp {level}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-        </>
-      )}
-    </div>
+      <HomePage
+        onStartQuickStudy={() => handleStartStudy('quick')}
+        onCreateNewSet={handleCreateNewSet}
+        onCreateNewFolder={handleCreateNewFolder}
+        onViewFolders={() => setCurrentPage('folders')}
+        onOpenSettings={() => setShowSettings(true)}
+        onExportBackup={handleExportBackup}
+        onImportBackup={handleImportBackup}
+      />
+      <input
+        type="file"
+        accept="application/json"
+        ref={backupInputRef}
+        onChange={handleBackupFileChange}
+        style={{ display: 'none' }}
+      />
+    </>
   );
 };
 

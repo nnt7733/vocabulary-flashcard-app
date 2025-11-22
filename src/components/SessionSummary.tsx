@@ -8,6 +8,8 @@ interface SessionSummaryProps {
   durationMinutes: number;
   onReviewIncorrect: () => void;
   onFinish: () => void;
+  onStudyAgain?: () => void;
+  learningMode?: 'study' | 'test';
 }
 
 const SessionSummary: React.FC<SessionSummaryProps> = ({
@@ -16,7 +18,9 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
   incorrectCards,
   durationMinutes,
   onReviewIncorrect,
-  onFinish
+  onFinish,
+  onStudyAgain,
+  learningMode = 'test'
 }) => {
   const totalCards = correctCount + incorrectCount;
   const accuracy = Math.round((correctCount / totalCards) * 100) || 0;
@@ -30,10 +34,12 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
     <div className="card">
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <h2 style={{ fontSize: '32px', marginBottom: '16px' }}>
-          🎉 Hoàn thành phiên học!
+          {learningMode === 'study' ? '📖 Study Complete!' : '🎉 Test Complete!'}
         </h2>
         <p className="session-summary-subtitle">
-          Bạn đã hoàn thành {totalCards} thẻ từ vựng
+          {learningMode === 'study' 
+            ? `Đã xem ${totalCards} thẻ (chỉ học, chưa test)`
+            : `Đã hoàn thành ${totalCards} thẻ từ vựng`}
         </p>
       </div>
 
@@ -92,34 +98,59 @@ const SessionSummary: React.FC<SessionSummaryProps> = ({
             <button onClick={onReviewIncorrect} className="btn btn-primary">
               📚 Ôn lại {incorrectCards.length} từ chưa thuộc
             </button>
+            {onStudyAgain && (
+              <button onClick={onStudyAgain} className="btn btn-secondary">
+                🔄 Study lại set này
+              </button>
+            )}
             <button onClick={onFinish} className="btn btn-secondary">
               ✅ Hoàn thành
             </button>
           </>
         ) : (
-          <button onClick={onFinish} className="btn btn-success">
-            🎉 Hoàn thành - Bạn đã thuộc tất cả!
-          </button>
+          <>
+            <button onClick={onFinish} className="btn btn-success">
+              🎉 Hoàn thành - Bạn đã thuộc tất cả!
+            </button>
+            {onStudyAgain && (
+              <button onClick={onStudyAgain} className="btn btn-secondary">
+                🔄 Study lại set này
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      <div className="learning-mechanism-info">
-        <p className="learning-mechanism-text">
-          💡 <strong>Cơ chế học tập:</strong>
-        </p>
-        <p className="learning-mechanism-text">
-          • Trả lời <strong>đúng</strong> → Tăng 1 cấp độ
-        </p>
-        <p className="learning-mechanism-text">
-          • Trả lời <strong>sai</strong> → Giảm 1 cấp độ
-        </p>
-        <p className="learning-mechanism-text">
-          • Bỏ lỡ ôn tập <strong>3 ngày liên tiếp</strong> → Tự động giảm 1 cấp độ
-        </p>
-        <p className="learning-mechanism-text" style={{ marginBottom: 0 }}>
-          • Sai <strong>2 lần liên tiếp</strong> → Reset về cấp 0
-        </p>
-      </div>
+      {learningMode === 'test' && (
+        <div className="learning-mechanism-info">
+          <p className="learning-mechanism-text">
+            💡 <strong>Cơ chế học tập:</strong>
+          </p>
+          <p className="learning-mechanism-text">
+            • Trả lời <strong>đúng</strong> → Tăng 1 cấp độ
+          </p>
+          <p className="learning-mechanism-text">
+            • Trả lời <strong>sai</strong> → Giảm 1 cấp độ
+          </p>
+          <p className="learning-mechanism-text">
+            • Bỏ lỡ ôn tập <strong>3 ngày liên tiếp</strong> → Tự động giảm 1 cấp độ
+          </p>
+          <p className="learning-mechanism-text" style={{ marginBottom: 0 }}>
+            • Sai <strong>2 lần liên tiếp</strong> → Reset về cấp 0
+          </p>
+        </div>
+      )}
+
+      {learningMode === 'study' && (
+        <div className="learning-mechanism-info" style={{ background: 'var(--bg-secondary)' }}>
+          <p className="learning-mechanism-text">
+            📖 <strong>Study Mode:</strong> Phiên học này không ảnh hưởng đến tiến độ hay cấp độ của từ vựng.
+          </p>
+          <p className="learning-mechanism-text" style={{ marginBottom: 0 }}>
+            Chỉ có <strong>Test Mode</strong> mới tăng cấp độ và đánh dấu từ đã học.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

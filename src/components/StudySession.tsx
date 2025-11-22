@@ -7,6 +7,8 @@ interface StudySessionProps {
   cards: Flashcard[];
   onComplete: (result: StudySessionResult) => void;
   onExit: () => void;
+  onToggleFavorite?: (card: Flashcard) => void;
+  learningMode?: 'study' | 'test'; // study = no progress, test = track progress
 }
 
 export interface StudySessionResult {
@@ -21,9 +23,10 @@ export interface StudySessionResult {
   finishedAt: Date;
   durationMs: number;
   overdueReviewed: number;
+  learningMode: 'study' | 'test';
 }
 
-const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }) => {
+const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit, onToggleFavorite, learningMode = 'test' }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [startTime, setStartTime] = useState<number>(Date.now());
@@ -194,7 +197,11 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
     const now = new Date();
     const wasOverdue = previousCardState.nextReviewDate < now;
     const nextOverdueCount = wasOverdue ? overdueCount + 1 : overdueCount;
-    const updatedCard = updateCardAfterReview(previousCardState, correct, responseTime);
+    
+    // Only update card progress in TEST mode, not STUDY mode
+    const updatedCard = learningMode === 'test' 
+      ? updateCardAfterReview(previousCardState, correct, responseTime)
+      : previousCardState; // Keep card unchanged in study mode
 
     // Save history snapshot for undo
     const nextIncorrectIndex = correct ? null : incorrectCards.length;
@@ -252,7 +259,8 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
         startedAt,
         finishedAt,
         durationMs: finishedAt.getTime() - sessionStartRef.current,
-        overdueReviewed: nextOverdueCount
+        overdueReviewed: nextOverdueCount,
+        learningMode
       });
     }
   }, [cards, currentCard, currentIndex, incorrectCards, onComplete, overdueCount, sessionStats, startTime, updatedCardsMap]);
@@ -363,9 +371,9 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
 
   return (
     <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h2 style={{ margin: 0 }}>
-          Học từ vựng ({currentIndex + 1}/{totalCards})
+          {learningMode === 'study' ? '📖 Study Mode' : '✅ Test Mode'} ({currentIndex + 1}/{totalCards})
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
@@ -398,6 +406,37 @@ const StudySession: React.FC<StudySessionProps> = ({ cards, onComplete, onExit }
       </div>
 
       <div className="flashcard" onClick={handleFlip}>
+        {/* Favorite Star - Top Right Corner */}
+        {onToggleFavorite && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(currentCard);
+            }}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'none',
+              border: 'none',
+              fontSize: '28px',
+              cursor: 'pointer',
+              padding: '4px',
+              transition: 'opacity 0.2s ease',
+              opacity: currentCard.isFavorite ? 1 : 0.4
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = currentCard.isFavorite ? '1' : '0.4';
+            }}
+            title={currentCard.isFavorite ? 'Bỏ favorite' : 'Đánh dấu favorite'}
+          >
+            {currentCard.isFavorite ? '⭐' : '☆'}
+          </button>
+        )}
+        
         <div className="term" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
           {isFlipped ? currentCard.definition : (
             <>

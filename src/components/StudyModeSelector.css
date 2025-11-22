@@ -1,0 +1,218 @@
+.mode-selector-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: fadeIn 0.3s ease-out;
+  padding: 20px;
+}
+
+.mode-selector-content {
+  max-width: 700px;
+  width: 100%;
+  padding: 32px;
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  animation: scaleIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 16px;
+}
+
+[data-theme="light"] .mode-selector-content {
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.mode-selector-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+  text-align: center;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .mode-selector-title {
+  color: #000000;
+  text-shadow: none;
+}
+
+.mode-selector-subtitle {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  margin-bottom: 24px;
+  font-weight: 600;
+}
+
+[data-theme="light"] .mode-selector-subtitle {
+  color: #333333;
+}
+
+.mode-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.mode-option {
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .mode-option {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.mode-option:hover {
+  transform: translateY(-4px);
+  background: #333333;
+  border-color: #4a4a4a;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .mode-option:hover {
+  background: #ffffff;
+  border-color: #d0d0d0;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.mode-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.mode-option h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .mode-option h3 {
+  color: #000000;
+  text-shadow: none;
+}
+
+.mode-option p {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+[data-theme="light"] .mode-option p {
+  color: #333333;
+}
+
+.mode-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.mode-features li {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 6px;
+  padding-left: 20px;
+  position: relative;
+  font-weight: 500;
+}
+
+.mode-features li::before {
+  content: '•';
+  position: absolute;
+  left: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 700;
+}
+
+[data-theme="light"] .mode-features li {
+  color: #444444;
+}
+
+[data-theme="light"] .mode-features li::before {
+  color: #666666;
+}
+
+.mode-cancel-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.2s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] .mode-cancel-btn {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000000;
+  border-color: rgba(0, 0, 0, 0.15);
+  text-shadow: none;
+}
+
+.mode-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] .mode-cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .mode-options {
+    grid-template-columns: 1fr;
+  }
+}
+
